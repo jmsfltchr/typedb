@@ -1,0 +1,66 @@
+define
+
+############################################################
+# Data
+############################################################
+
+value sub attribute datatype double;
+feature-name sub attribute datatype string;
+# double-feature sub attribute datatype double;
+# long-feature sub attribute datatype long;
+# date-feature sub attribute datatype date;
+
+feature-vector sub relationship,
+    relates vector-member,
+    plays decision-subject;
+
+feature sub entity,
+    plays vector-member,
+    has value,
+    has feature-name;
+
+############################################################
+# Forest and tree definition
+############################################################
+
+forest sub relationship,
+    relates contained-tree;
+
+tree sub relationship,
+    plays contained-tree,
+    relates tree-node,
+    relates root as tree-node,
+    relates leaf as tree-node;
+
+############################################################
+# Tree internals
+############################################################
+
+comparison-operator sub attribute datatype string;
+decision-boundary sub attribute datatype double;
+
+decision sub relationship,
+    relates decision-subject, # feature-vector
+    relates discriminator, # node
+    relates outcome, # whether positive or negative
+    relates positive-outcome as outcome,
+    relates negative-outcome as outcome;
+
+node sub entity,
+    plays tree-node;
+
+leaf-node sub node,
+    plays leaf;
+
+discriminatory-node sub node,
+    plays discriminator,
+    has comparison-operator,
+    has decision-boundary,
+    has feature-name;
+
+# If we need to discriminate between types
+# double-discriminatory-node sub discriminatory-node,
+#     has double-decision-boundary;
+
+root-node sub discriminatory-node,
+    plays root;

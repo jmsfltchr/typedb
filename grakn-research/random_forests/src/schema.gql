@@ -12,7 +12,11 @@ feature-name sub attribute datatype string;
 
 feature-vector sub relationship,
     relates vector-member,
-    plays decision-subject;
+    plays subject-data;
+
+training-feature-vector sub feature-vector,
+    relates vector-member,
+    plays training-data;
 
 feature sub entity,
     plays vector-member,
@@ -24,7 +28,8 @@ feature sub entity,
 ############################################################
 
 forest sub relationship,
-    relates contained-tree;
+    relates contained-tree,
+    relates training-data;
 
 tree sub relationship,
     plays contained-tree,
@@ -39,28 +44,83 @@ tree sub relationship,
 comparison-operator sub attribute datatype string;
 decision-boundary sub attribute datatype double;
 
-decision sub relationship,
-    relates decision-subject, # feature-vector
-    relates discriminator, # node
-    relates outcome, # whether positive or negative
+node sub relationship,
+    relates subject-data,
+    plays tree-node,
+    plays positive-outcome,
+    plays negative-outcome,
+    relates outcome; # I don't want to include this, but I'm forced to as a result of:
+    # (*1) The Role [positive-outcome] which is connected to Relationship Type [decision-node] does not have a super Role Type which is connected to the super Relationship Type [node]
+
+leaf-node sub node,
+    relates subject-data,
+    relates outcome, # I don't want to include this, but I'm forced to as a result of *1
+    plays leaf;
+    
+decision-node sub node,
+    has comparison-operator,
+    has decision-boundary,
+    has feature-name,
+    relates subject-data,
+    # We can't do this within the same class yet
+    # relates outcome, # whether positive or negative
+    # relates positive-outcome as outcome,
+    # relates negative-outcome as outcome,
     relates positive-outcome as outcome,
     relates negative-outcome as outcome;
 
-node sub entity,
-    plays tree-node;
-
-leaf-node sub node,
-    plays leaf;
-
-discriminatory-node sub node,
-    plays discriminator,
-    has comparison-operator,
-    has decision-boundary,
-    has feature-name;
-
-# If we need to discriminate between types
-# double-discriminatory-node sub discriminatory-node,
-#     has double-decision-boundary;
-
-root-node sub discriminatory-node,
+root-node sub decision-node,
+    relates subject-data,
+    # relates outcome, # whether positive or negative
+    relates positive-outcome as outcome, # Once *1 is resolved, 'as outcome' can be removed
+    relates negative-outcome as outcome,
     plays root;
+
+############################################################
+# Inject training data from forest into each tree
+############################################################
+
+inject-at-tree-root sub rule,
+when {
+    $f(training-data: $fv, contained-tree: $t) isa forest;
+    $t(root: $root-node) isa tree;
+    $fv isa training-feature-vector;
+} then {
+    $root-node(subject-data: $fv) isa root-node;
+};
+
+############################################################
+# Decision-making
+############################################################
+
+positive-discrimination sub rule,
+when {
+    $node(subject-data: $fv, positive-outcome: $destination-node) isa decision-node, 
+        has decision-boundary $b, 
+        has feature-name $fn;
+
+    $fv(vector-member: $feat) isa feature-vector;
+    $feat isa feature, 
+        has value $val, 
+        has feature-name $fn;
+    $val >= $b;
+    $destination-node isa node;
+} then {
+    $destination-node(subject-data: $fv) isa node;
+};
+
+negative-discrimination sub rule,
+when {
+    $node(subject-data: $fv, negative-outcome: $destination-node) isa decision-node, 
+        has decision-boundary $b, 
+        has feature-name $fn;
+
+    $fv(vector-member: $feat) isa feature-vector;
+    $feat isa feature, 
+        has value $val, 
+        has feature-name $fn;
+    $val < $b;
+    $destination-node isa node;
+} then {
+    $destination-node(subject-data: $fv) isa node;
+};

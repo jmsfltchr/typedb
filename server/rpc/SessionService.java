@@ -20,7 +20,6 @@ package grakn.core.server.rpc;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import grabl.tracing.client.GrablTracing;
 import grabl.tracing.client.GrablTracingThreadStatic;
-import grabl.tracing.client.GrablTracingThreadStatic.ThreadTrace;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.concept.answer.Explanation;
 import grakn.core.kb.concept.api.Attribute;
@@ -43,7 +42,6 @@ import graql.lang.Graql;
 import graql.lang.pattern.Pattern;
 import graql.lang.query.GraqlQuery;
 import io.grpc.Status;
-import io.grpc.StatusException;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +65,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-import static grabl.tracing.client.GrablTracingThreadStatic.traceOnThread;
 import static grakn.core.kb.server.Transaction.DEFAULT_EXPLAIN;
 import static grakn.core.kb.server.Transaction.DEFAULT_INFER;
 
@@ -219,12 +216,8 @@ public class SessionService extends SessionServiceGrpc.SessionServiceImplBase {
         }
 
         private void handleRequest(Transaction.Req request, GrablTracing.Trace queueTrace) {
-            try (ThreadTrace trace = GrablTracingThreadStatic.continueTraceOnThread(
-                    queueTrace.getRootId(), queueTrace.getId(), "handle")
-            ) {
-                queueTrace.end();
-                handleRequest(request);
-            }
+            queueTrace.end();
+            handleRequest(request);
         }
 
         private void handleRequest(Transaction.Req request) {
@@ -366,41 +359,34 @@ public class SessionService extends SessionServiceGrpc.SessionServiceImplBase {
 
         private void query(SessionProto.Transaction.Query.Iter.Req request, SessionProto.Transaction.Iter.Req.Options options) {
             Transaction.Res response;
-            try (ThreadTrace trace = traceOnThread("query")) {
-                GraqlQuery query;
-                try (ThreadTrace parse = traceOnThread("parse")) {
-                    query = Graql.parse(request.getQuery());
-                }
+            GraqlQuery query;
+            query = Graql.parse(request.getQuery());
 
-                try (ThreadTrace stream = traceOnThread("stream")) {
+            // unpack the options into server side values for now, may use an Options object once this grows
+            boolean infer;
+            boolean explain;
 
-                    // unpack the options into server side values for now, may use an Options object once this grows
-                    boolean infer;
-                    boolean explain;
+            Transaction.Query.Options queryOptions = request.getOptions();
 
-                    Transaction.Query.Options queryOptions = request.getOptions();
-
-                    Transaction.Query.Options.InferCase inferOption = queryOptions.getInferCase();
-                    if (inferOption.equals(Transaction.Query.Options.InferCase.INFER_NOT_SET)) {
-                        infer = DEFAULT_INFER;
-                    } else {
-                        infer = queryOptions.getInferFlag();
-                    }
-
-                    Transaction.Query.Options.ExplainCase explainOption = queryOptions.getExplainCase();
-                    if (explainOption.equals(Transaction.Query.Options.ExplainCase.EXPLAIN_NOT_SET)) {
-                        explain = DEFAULT_EXPLAIN;
-                    } else {
-                        explain = queryOptions.getExplainFlag();
-                    }
-
-                    Stream<Transaction.Res> responseStream = tx()
-                            .stream(query, infer, explain)
-                            .map(ResponseBuilder.Transaction.Iter::query);
-
-                    iterators.startBatchIterating(responseStream.iterator(), options);
-                }
+            Transaction.Query.Options.InferCase inferOption = queryOptions.getInferCase();
+            if (inferOption.equals(Transaction.Query.Options.InferCase.INFER_NOT_SET)) {
+                infer = DEFAULT_INFER;
+            } else {
+                infer = queryOptions.getInferFlag();
             }
+
+            Transaction.Query.Options.ExplainCase explainOption = queryOptions.getExplainCase();
+            if (explainOption.equals(Transaction.Query.Options.ExplainCase.EXPLAIN_NOT_SET)) {
+                explain = DEFAULT_EXPLAIN;
+            } else {
+                explain = queryOptions.getExplainFlag();
+            }
+
+            Stream<Transaction.Res> responseStream = tx()
+                    .stream(query, infer, explain)
+                    .map(ResponseBuilder.Transaction.Iter::query);
+
+            iterators.startBatchIterating(responseStream.iterator(), options);
         }
 
         private void getSchemaConcept(Transaction.GetSchemaConcept.Req request) {

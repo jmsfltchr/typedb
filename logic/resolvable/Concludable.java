@@ -27,6 +27,7 @@ import grakn.core.concept.type.Type;
 import grakn.core.graph.util.Encoding;
 import grakn.core.logic.LogicManager;
 import grakn.core.logic.Rule;
+import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.constraint.Constraint;
 import grakn.core.pattern.constraint.ConstraintCloner;
 import grakn.core.pattern.constraint.thing.HasConstraint;
@@ -65,8 +66,7 @@ public abstract class Concludable extends Resolvable {
 
     private Map<Rule, Set<Unifier>> applicableRules = null;
 
-    private Concludable(Set<Variable> variables) {
-        super(variables);
+    private Concludable() {
         applicableRules = new HashMap<>(); // TODO Implement
     }
 
@@ -162,6 +162,11 @@ public abstract class Concludable extends Resolvable {
         return clone;
     }
 
+    @Override
+    public Conjunction conjunction() {
+        return null; //TODO Make abstract and implement for all subtypes
+    }
+
     /*
     Unifying a source type variable with a target type variable is impossible if none of the source's allowed labels,
     and their subtypes' labels, are found in the allowed labels of the target type.
@@ -225,7 +230,6 @@ public abstract class Concludable extends Resolvable {
         private final Set<LabelConstraint> labels;
 
         private Relation(Set<Variable> variables, RelationConstraint relation, @Nullable IsaConstraint isaConstraint, Set<LabelConstraint> labels) {
-            super(variables);
             this.relation = relation;
             this.isaConstraint = isaConstraint;
             this.labels = labels;
@@ -360,7 +364,6 @@ public abstract class Concludable extends Resolvable {
         private final Set<ValueConstraint<?>> values;
 
         private Has(Set<Variable> variables, HasConstraint has, @Nullable IsaConstraint isa, Set<ValueConstraint<?>> values) {
-            super(variables);
             this.has = has;
             this.isa = isa;
             this.values = values;
@@ -483,7 +486,6 @@ public abstract class Concludable extends Resolvable {
         private final Set<ValueConstraint<?>> values;
 
         private Isa(Set<Variable> variables, IsaConstraint isa, Set<ValueConstraint<?>> values) {
-            super(variables);
             this.isa = isa;
             this.values = values;
         }
@@ -545,7 +547,6 @@ public abstract class Concludable extends Resolvable {
         private final ValueConstraint<?> value;
 
         public Attribute(Set<Variable> variables, ValueConstraint<?> value) {
-            super(variables);
             this.value = value;
         }
 

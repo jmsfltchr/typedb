@@ -88,7 +88,7 @@ public class Retrievable extends Resolvable {
             });
             return Iterators.iterate(subgraphs).filter(SubgraphRegistry::isValid).map(subgraph -> {
                 ConstraintCloner cloner = ConstraintCloner.cloneFromConstraints(subgraph.registeredConstraints);
-                return new Retrievable(new Conjunction(cloner.variables(), set()));
+                return new Retrievable(new Conjunction(cloner.constraints(), set()));
             }).toSet();
         }
 

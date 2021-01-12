@@ -17,6 +17,7 @@
 
 package grakn.core.pattern.constraint;
 
+import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.variable.ThingVariable;
 import grakn.core.pattern.variable.TypeVariable;
 import grakn.core.pattern.variable.Variable;
@@ -41,6 +42,12 @@ public class ConstraintCloner {
     public static ConstraintCloner cloneFromConstraints(Set<Constraint> constraints) {
         ConstraintCloner cloner = new ConstraintCloner();
         constraints.forEach(cloner::clone);
+        return cloner;
+    }
+
+    public static ConstraintCloner cloneFromConjunction(Conjunction conjunction) {
+        ConstraintCloner cloner = new ConstraintCloner();
+        conjunction.constraints().forEach(cloner::clone);
         return cloner;
     }
 
@@ -70,5 +77,9 @@ public class ConstraintCloner {
 
     public Constraint getClone(Constraint constraint) {
         return constraints.get(constraint);
+    }
+
+    public Set<Constraint> constraints() {
+        return set(constraints.values());
     }
 }

@@ -20,8 +20,10 @@ package grakn.core.pattern;
 
 import grabl.tracing.client.GrablTracingThreadStatic.ThreadTrace;
 import grakn.core.common.exception.GraknException;
+import grakn.core.common.iterator.Iterators;
+import grakn.core.pattern.constraint.Constraint;
+import grakn.core.pattern.constraint.ConstraintCloner;
 import grakn.core.pattern.variable.Variable;
-import grakn.core.pattern.variable.VariableCloner;
 import grakn.core.pattern.variable.VariableRegistry;
 import grakn.core.traversal.Traversal;
 import graql.lang.pattern.Conjunctable;
@@ -49,14 +51,16 @@ import static java.util.stream.Collectors.toSet;
 public class Conjunction implements Pattern, Cloneable {
 
     private static final String TRACE_PREFIX = "conjunction.";
+    private final Set<Constraint> constraints;
     private final Set<Variable> variables;
     private final Set<Negation> negations;
     private final int hash;
 
-    public Conjunction(Set<Variable> variables, Set<Negation> negations) {
-        this.variables = unmodifiableSet(variables);
+    public Conjunction(Set<? extends Constraint> constraints, Set<Negation> negations) {
+        this.constraints = unmodifiableSet(constraints);
+        this.variables = unmodifiableSet(Iterators.iterate(constraints).flatMap(constraint -> Iterators.iterate(constraint.variables())).toSet());
         this.negations = unmodifiableSet(negations);
-        this.hash = Objects.hash(variables, negations);
+        this.hash = Objects.hash(constraints, negations);
     }
 
     public static Conjunction create(graql.lang.pattern.Conjunction<Conjunctable> graql) {
@@ -79,12 +83,16 @@ public class Conjunction implements Pattern, Cloneable {
             VariableRegistry registry = VariableRegistry.createFromVariables(graqlVariables, bounds);
             Set<Negation> graknNegations = graqlNegations.isEmpty() ? set() :
                     graqlNegations.stream().map(n -> Negation.create(n, registry)).collect(toSet());
-            return new Conjunction(registry.variables(), graknNegations);
+            return new Conjunction(registry.constraints(), graknNegations);
         }
     }
 
     public Set<Variable> variables() {
         return variables;
+    }
+
+    public Set<Constraint> constraints() {
+        return constraints;
     }
 
     public Set<Negation> negations() {
@@ -110,7 +118,7 @@ public class Conjunction implements Pattern, Cloneable {
 
     @Override
     public Conjunction clone() {
-        return new Conjunction(VariableCloner.cloneFromConjunction(this).variables(),
+        return new Conjunction(ConstraintCloner.cloneFromConjunction(this).constraints(),
                                iterate(this.negations).map(Negation::clone).toSet());
     }
 
@@ -125,8 +133,7 @@ public class Conjunction implements Pattern, Cloneable {
         if (this == obj) return true;
         if (obj == null || obj.getClass() != getClass()) return false;
         final Conjunction that = (Conjunction) obj;
-        // TODO This doesn't work! It doesn't compare constraints
-        return (this.variables.equals(that.variables()) &&
+        return (this.constraints.equals(that.constraints()) &&
                 this.negations.equals(that.negations()));
     }
 

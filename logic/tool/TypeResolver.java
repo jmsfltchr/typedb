@@ -19,12 +19,14 @@
 package grakn.core.logic.tool;
 
 import grakn.core.common.exception.GraknException;
+import grakn.core.common.iterator.Iterators;
 import grakn.core.common.parameters.Label;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.type.Type;
 import grakn.core.graph.vertex.TypeVertex;
 import grakn.core.logic.LogicCache;
 import grakn.core.pattern.Conjunction;
+import grakn.core.pattern.constraint.Constraint;
 import grakn.core.pattern.constraint.thing.HasConstraint;
 import grakn.core.pattern.constraint.thing.IIDConstraint;
 import grakn.core.pattern.constraint.thing.IsaConstraint;
@@ -206,7 +208,8 @@ public class TypeResolver {
     }
 
     private Map<Reference, Set<Label>> retrieveResolveTypes(Set<Variable> resolveVars) {
-        Conjunction resolveVariableConjunction = new Conjunction(resolveVars, Collections.emptySet());
+        Set<? extends Constraint> resolveConstraints = iterate(resolveVars).flatMap(var -> Iterators.iterate(var.constraints())).toSet();
+        Conjunction resolveVariableConjunction = new Conjunction(resolveConstraints, Collections.emptySet());
         resolveVariableConjunction = resolveLabels(resolveVariableConjunction);
         return logicCache.resolver().get(resolveVariableConjunction, conjunction -> {
             Map<Reference, Set<Label>> mapping = new HashMap<>();

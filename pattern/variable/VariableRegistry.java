@@ -20,6 +20,8 @@ package grakn.core.pattern.variable;
 
 import grabl.tracing.client.GrablTracingThreadStatic;
 import grakn.core.common.exception.GraknException;
+import grakn.core.common.iterator.Iterators;
+import grakn.core.pattern.constraint.Constraint;
 import grakn.core.traversal.common.Identifier;
 import graql.lang.pattern.variable.BoundVariable;
 import graql.lang.pattern.variable.ConceptVariable;
@@ -146,6 +148,10 @@ public class VariableRegistry {
         output.addAll(things.values());
         output.addAll(anonymous);
         return unmodifiableSet(output);
+    }
+
+    public Set<? extends Constraint> constraints() {
+        return Iterators.iterate(variables()).flatMap(v -> Iterators.iterate(v.constraints())).toSet();
     }
 
     public boolean contains(Reference reference) {

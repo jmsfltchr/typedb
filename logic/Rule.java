@@ -207,7 +207,7 @@ public class Rule {
 
     private Conjunction thenPattern(ThingVariable<?> thenVariable) {
         return logicManager.typeResolver().resolveLabels(
-                new Conjunction(VariableRegistry.createFromThings(list(thenVariable)).variables(), set()));
+                new Conjunction(VariableRegistry.createFromThings(list(thenVariable)).constraints(), set()));
     }
 
     public static abstract class Conclusion {

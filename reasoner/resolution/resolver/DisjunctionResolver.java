@@ -19,7 +19,6 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.concept.ConceptManager;
-import grakn.core.concept.answer.ConceptMap;
 import grakn.core.pattern.Disjunction;
 import grakn.core.reasoner.resolution.ResolutionRecorder;
 import grakn.core.reasoner.resolution.ResolverRegistry;
@@ -34,20 +33,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import static grakn.core.common.iterator.Iterators.iterate;
 
-public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<RESOLVER>>
-        extends CompoundResolver<RESOLVER, DisjunctionResolver.RequestState> {
+public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<RESOLVER>> extends CompoundResolver<RESOLVER> {
 
     private static final Logger LOG = LoggerFactory.getLogger(Disjunction.class);
 
     protected final List<Driver<ConjunctionResolver.Nested>> downstreamResolvers;
     private final grakn.core.pattern.Disjunction disjunction;
-    protected long skipped;
     protected long answered;
 
     public DisjunctionResolver(Driver<RESOLVER> driver, String name, grakn.core.pattern.Disjunction disjunction,
@@ -127,32 +123,6 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
         // TODO use a map from resolvable to resolvers, then we don't have to reach into the state and use the conjunction
         return iterate(conjunctionResolver.actor().conjunction().variables()).filter(v -> v.id().isRetrievable())
                 .map(v -> v.id().asRetrievable()).toSet();
-    }
-
-    static class RequestState extends CompoundResolver.RequestState {
-
-        private final Set<ConceptMap> produced;
-
-        public RequestState(int iteration) {
-            this(iteration, new HashSet<>());
-        }
-
-        public RequestState(int iteration, Set<ConceptMap> produced) {
-            super(iteration);
-            this.produced = produced;
-        }
-
-        public void recordProduced(ConceptMap conceptMap) {
-            produced.add(conceptMap);
-        }
-
-        public boolean hasProduced(ConceptMap conceptMap) {
-            return produced.contains(conceptMap);
-        }
-
-        public Set<ConceptMap> produced() {
-            return produced;
-        }
     }
 
     public static class Nested extends DisjunctionResolver<Nested> {

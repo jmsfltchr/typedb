@@ -21,7 +21,6 @@ package grakn.core.reasoner.resolution.resolver;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.ConceptManager;
-import grakn.core.concept.answer.ConceptMap;
 import grakn.core.logic.LogicManager;
 import grakn.core.logic.resolvable.Concludable;
 import grakn.core.logic.resolvable.Negated;
@@ -51,10 +50,8 @@ import java.util.Set;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
-import static grakn.core.common.iterator.Iterators.single;
 
-public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<RESOLVER>>
-        extends CompoundResolver<RESOLVER, ConjunctionResolver.RequestState> {
+public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<RESOLVER>> extends CompoundResolver<RESOLVER> {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConjunctionResolver.class);
 
@@ -216,32 +213,6 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
             return partialAnswer.filterToDownstream(resolver.asFiltered().filter(), resolver.resolver());
         } else {
             throw GraknException.of(ILLEGAL_STATE);
-        }
-    }
-
-    public static class RequestState extends CompoundResolver.RequestState {
-
-        private final Set<ConceptMap> produced;
-
-        public RequestState(int iteration) {
-            this(iteration, new HashSet<>());
-        }
-
-        public RequestState(int iteration, Set<ConceptMap> produced) {
-            super(iteration);
-            this.produced = produced;
-        }
-
-        public void recordProduced(ConceptMap conceptMap) {
-            produced.add(conceptMap);
-        }
-
-        public boolean hasProduced(ConceptMap conceptMap) {
-            return produced.contains(conceptMap);
-        }
-
-        public Set<ConceptMap> produced() {
-            return produced;
         }
     }
 

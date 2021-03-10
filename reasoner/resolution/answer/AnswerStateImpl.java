@@ -837,7 +837,7 @@ public abstract class AnswerStateImpl implements AnswerState {
                 @Override
                 public Optional<Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
                     Optional<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
-                    return unUnified.map(ans -> parent().with(ans, true));
+                    return unUnified.map(ans -> parent().with(ans, requiresReiteration()));
                 }
 
                 @Override

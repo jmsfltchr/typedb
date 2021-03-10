@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static grakn.common.collection.Collections.set;
@@ -49,8 +50,8 @@ public class Planner {
         this.logicMgr = logicMgr;
     }
 
-    public List<Resolvable<?>> plan(Set<Resolvable<?>> resolvables, Set<Retrievable> bound) {
-        return new Plan(resolvables, bound).plan;
+    public List<Resolvable<?>> plan(Set<Resolvable<?>> resolvables, Map<Resolvable<?>, Integer> resolvableStatistics, Set<Retrievable> boundVariables) {
+        return new Plan(resolvables, resolvableStatistics, boundVariables).plan;
     }
 
     class Plan {
@@ -58,13 +59,15 @@ public class Planner {
         private final Map<Resolvable<?>, Set<Retrievable>> dependencies;
         private final Set<Retrievable> answered;
         private final Set<Resolvable<?>> remaining;
+        private final Map<Resolvable<?>, Integer> statistics;
 
-        Plan(Set<Resolvable<?>> resolvables, Set<Retrievable> boundVars) {
+        Plan(Set<Resolvable<?>> resolvables, Map<Resolvable<?>, Integer> statistics, Set<Retrievable> boundVariables) {
             assert resolvables.size() > 0;
-            this.plan = new ArrayList<>();
-            this.answered = new HashSet<>(boundVars);
-            this.dependencies = dependencies(resolvables);
             this.remaining = new HashSet<>(resolvables);
+            this.statistics = statistics;
+            this.answered = new HashSet<>(boundVariables);
+            this.dependencies = dependencies(resolvables);
+            this.plan = new ArrayList<>();
             computePlan();
             assert plan.size() == resolvables.size();
             assert set(plan).equals(resolvables);
@@ -82,9 +85,9 @@ public class Planner {
                 Optional<grakn.core.logic.resolvable.Retrievable> retrievable;
 
                 // Retrievable where:
+                // it is connected
                 // all of it's dependencies are already satisfied,
-                // which will answer the most variables
-                retrievable = mostAnsweredVars(dependenciesSatisfied(hasAnsweredVar(remaining.stream().filter(Resolvable::isRetrievable))))
+                retrievable = sortedByStatistics(dependenciesSatisfied(hasAnsweredVar(remaining.stream().filter(Resolvable::isRetrievable))))
                         .map(Resolvable::asRetrievable);
                 if (retrievable.isPresent()) {
                     add(retrievable.get());
@@ -92,10 +95,9 @@ public class Planner {
                 }
 
                 // Concludable where:
+                // it is connected
                 // all of it's dependencies are already satisfied,
-                // which has the least applicable rules,
-                // and of those the least unsatisfied variables
-                concludable = mostAnsweredVars(dependenciesSatisfied(hasAnsweredVar(remaining.stream().filter(Resolvable::isConcludable))))
+                concludable = sortedByStatistics(dependenciesSatisfied(hasAnsweredVar(remaining.stream().filter(Resolvable::isConcludable))))
                         .map(Resolvable::asConcludable);
                 if (concludable.isPresent()) {
                     add(concludable.get());
@@ -103,10 +105,10 @@ public class Planner {
                 }
 
                 // Retrievable where:
+                // it can be disconnected
                 // all of it's dependencies are already satisfied (should be moot),
                 // it can be disconnected
-                // which will answer the most variables
-                retrievable = mostUnansweredVars(dependenciesSatisfied(remaining.stream().filter(Resolvable::isRetrievable)))
+                retrievable = sortedByStatistics(dependenciesSatisfied(remaining.stream().filter(Resolvable::isRetrievable)))
                         .map(Resolvable::asRetrievable);
                 if (retrievable.isPresent()) {
                     add(retrievable.get());
@@ -115,10 +117,9 @@ public class Planner {
 
                 // Concludable where:
                 // it can be disconnected
-                // all of it's dependencies are already satisfied,
-                // which has the least applicable rules,
-                // and of those the least unsatisfied variables
-                concludable = fewestRules(dependenciesSatisfied(remaining.stream().filter(Resolvable::isConcludable)));
+                // all of it's dependencies are already satisfied
+                concludable = sortedByStatistics(dependenciesSatisfied(remaining.stream().filter(Resolvable::isConcludable)))
+                        .map(Resolvable::asConcludable);
                 if (concludable.isPresent()) {
                     add(concludable.get());
                     continue;
@@ -126,15 +127,14 @@ public class Planner {
 
                 // Concludable where:
                 // it can be disconnected
-                // all of it's dependencies are NOT already satisfied,
-                // which has the least applicable rules,
-                // and of those the least unsatisfied variables
-                concludable = fewestRules(remaining.stream().filter(Resolvable::isConcludable));
+                // all of it's dependencies are NOT already satisfied
+                concludable = sortedByStatistics(remaining.stream().filter(Resolvable::isConcludable))
+                        .map(Resolvable::asConcludable);
                 if (concludable.isPresent()) {
+                    // TODO: This should trigger reiteration
                     add(concludable.get());
                     continue;
                 }
-
                 throw GraknException.of(ILLEGAL_STATE);
             }
         }
@@ -147,20 +147,8 @@ public class Planner {
             return resolvableStream.filter(r -> !Collections.disjoint(r.retrieves(), answered));
         }
 
-        private Optional<Concludable> fewestRules(Stream<Resolvable<?>> resolvableStream) {
-            // TODO: Tie-break for Concludables with the same number of applicable rules
-            return resolvableStream.map(Resolvable::asConcludable)
-                    .min(Comparator.comparingInt(c -> (int) c.getApplicableRules(conceptMgr, logicMgr).count()));
-        }
-
-        private Optional<Resolvable<?>> mostAnsweredVars(Stream<Resolvable<?>> resolvables) {
-            return resolvables.max(Comparator.comparingInt(r -> iterate(r.retrieves())
-                    .filter(answered::contains).toSet().size()));
-        }
-
-        private Optional<Resolvable<?>> mostUnansweredVars(Stream<Resolvable<?>> resolvableStream) {
-            return resolvableStream.max(Comparator.comparingInt(r -> iterate(r.retrieves())
-                    .filter(id -> !answered.contains(id)).toSet().size()));
+        private Optional<Resolvable<?>> sortedByStatistics(Stream<Resolvable<?>> resolvables) {
+            return resolvables.max(Comparator.comparingInt(r -> statistics.getOrDefault(r, 0)));
         }
 
         /**

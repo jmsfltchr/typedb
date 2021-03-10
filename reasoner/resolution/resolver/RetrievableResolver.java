@@ -19,10 +19,14 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
+import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.ConceptManager;
+import grakn.core.concept.answer.ConceptMap;
+import grakn.core.concurrent.actor.Actor;
 import grakn.core.logic.resolvable.Retrievable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -33,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 
@@ -41,7 +46,8 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
     private static final Logger LOG = LoggerFactory.getLogger(RetrievableResolver.class);
 
     private final Retrievable retrievable;
-    private final Map<Request, RequestStates> requestStates;
+    private final Map<Request, RequestState> requestStates;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMap>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -49,6 +55,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
               registry, traversalEngine, conceptMgr, resolutionTracing);
         this.retrievable = retrievable;
         this.requestStates = new HashMap<>();
+        this.cacheRegisters = new HashMap<>();
     }
 
     @Override
@@ -56,7 +63,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         LOG.trace("{}: received Request: {}", name(), fromUpstream);
         if (isTerminated()) return;
 
-        RequestStates requestStates = getOrUpdateRequestState(fromUpstream, iteration);
+        RequestState requestStates = getOrReplaceRequestState(fromUpstream, iteration);
         if (iteration < requestStates.iteration()) {
             // short circuit old iteration failed messages to upstream
             failToUpstream(fromUpstream, iteration);
@@ -81,59 +88,78 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         throw GraknException.of(ILLEGAL_STATE);
     }
 
-    private RequestStates getOrUpdateRequestState(Request fromUpstream, int iteration) {
+    private RequestState getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!requestStates.containsKey(fromUpstream)) {
             requestStates.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
-            RequestStates requestStates = this.requestStates.get(fromUpstream);
+            RequestState requestStates = this.requestStates.get(fromUpstream);
 
             if (requestStates.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                RequestStates responseProducerNextIter = createRequestState(fromUpstream, iteration);
+                RequestState responseProducerNextIter = createRequestState(fromUpstream, iteration);
                 this.requestStates.put(fromUpstream, responseProducerNextIter);
             }
         }
         return requestStates.get(fromUpstream);
     }
 
-    protected RequestStates createRequestState(Request fromUpstream, int iteration) {
+    protected RequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ResponseProducer for iteration:{}, request: {}", name(), iteration, fromUpstream);
         assert fromUpstream.partialAnswer().isRetrievable();
-        FunctionalIterator<Partial.Compound<?, ?>> upstreamAnswers =
-                traversalIterator(retrievable.pattern(), fromUpstream.partialAnswer().conceptMap())
-                        .map(conceptMap -> fromUpstream.partialAnswer().asRetrievable().aggregateToUpstream(conceptMap));
-        return new RequestStates(upstreamAnswers, iteration);
+        ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
+        Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
+        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
+        CacheRegister<ConceptMap> cacheRegister = cacheRegisters.get(root);
+        AnswerCache<ConceptMap> answerCache;
+        if (cacheRegister.isRegistered(answerFromUpstream)) {
+            answerCache = cacheRegister.get(answerFromUpstream);
+        } else {
+            answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, false);
+            FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
+            answerCache.cache(traversal);
+        }
+        return new RequestState(fromUpstream, answerCache, iteration);
     }
 
-    private void nextAnswer(Request fromUpstream, RequestStates responseProducer, int iteration) {
-        if (responseProducer.hasUpstreamAnswer()) {
-            Partial.Compound<?, ?> upstreamAnswer = responseProducer.upstreamAnswers().next();
-            answerToUpstream(upstreamAnswer, fromUpstream, iteration);
+    private void nextAnswer(Request fromUpstream, RequestState responseProducer, int iteration) {
+        Optional<Partial.Compound<?, ?>> upstreamAnswer = responseProducer.nextAnswer().map(Partial::asCompound);
+        if (upstreamAnswer.isPresent()) {
+            answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
+            requestStates.get(fromUpstream).answerCache().setComplete();
             failToUpstream(fromUpstream, iteration);
         }
     }
 
-    private static class RequestStates {
+    protected static class ConceptMapCache extends AnswerCache<ConceptMap> {
 
-        private final FunctionalIterator<Partial.Compound<?, ?>> newUpstreamAnswers;
-        private final int iteration;
-
-        public RequestStates(FunctionalIterator<Partial.Compound<?, ?>> upstreamAnswers, int iteration) {
-            this.newUpstreamAnswers = upstreamAnswers;
-            this.iteration = iteration;
+        protected ConceptMapCache(CacheRegister<ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
+            super(cacheRegister, state, useSubsumption);
         }
 
-        public boolean hasUpstreamAnswer() {
-            return newUpstreamAnswers.hasNext();
+        @Override
+        protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
+            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
+        }
+    }
+
+    private static class RequestState extends CachingRequestState<ConceptMap> {
+
+        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration) {
+            super(fromUpstream, answerCache, iteration, true); // TODO do we want this to cause reiteration?
         }
 
-        public FunctionalIterator<Partial.Compound<?, ?>> upstreamAnswers() {
-            return newUpstreamAnswers;
+        @Override
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
+            Partial.Retrievable<?> retrievable = fromUpstream.partialAnswer().asRetrievable();
+            Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(conceptMap);
+            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
+            return Iterators.single(upstreamAnswer);
         }
 
-        public int iteration() {
-            return iteration;
+        @Override
+        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
+            return false;
         }
 
     }

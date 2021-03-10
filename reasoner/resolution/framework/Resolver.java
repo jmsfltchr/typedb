@@ -22,6 +22,7 @@ import grakn.common.collection.Either;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
+import grakn.core.common.poller.Poller;
 import grakn.core.concept.Concept;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
@@ -32,6 +33,7 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
+import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -41,11 +43,18 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
+import static grakn.core.common.iterator.Iterators.iterate;
 import static grakn.core.common.parameters.Arguments.Query.Producer.INCREMENTAL;
 
 public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Actor<RESOLVER> {
@@ -57,6 +66,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected final ConceptManager conceptMgr;
     private final boolean resolutionTracing;
     private boolean terminated;
+    private static final AtomicInteger messageCount = new AtomicInteger(0);
 
     protected Resolver(Driver<RESOLVER> driver, String name, ResolverRegistry registry, TraversalEngine traversalEngine,
                        ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -105,6 +115,13 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return requestRouter.get(toDownstream);
     }
 
+    private void logMessage(int iteration) {
+        int i = messageCount.incrementAndGet();
+        if (i % 100 == 0) {
+            LOG.info("Message count: {} (iteration {})", i, iteration);
+        }
+    }
+
     protected void requestFromDownstream(Request request, Request fromUpstream, int iteration) {
         LOG.trace("{} : Sending a new answer Request to downstream: {}", name(), request);
         if (resolutionTracing) ResolutionTracer.get().request(this.name(), request.receiver().name(), iteration,
@@ -112,6 +129,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         // TODO: we may overwrite if multiple identical requests are sent, when to clean up?
         requestRouter.put(request, fromUpstream);
         Driver<? extends Resolver<?>> receiver = request.receiver();
+        logMessage(iteration);
         receiver.execute(actor -> actor.receiveRequest(request, iteration));
     }
 
@@ -123,6 +141,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.name(), fromUpstream.sender().name(), iteration,
                 response.asAnswer().answer().conceptMap().concepts().keySet().toString()
         );
+        logMessage(iteration);
         fromUpstream.sender().execute(actor -> actor.receiveAnswer(response, iteration));
     }
 
@@ -132,6 +151,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         if (resolutionTracing) ResolutionTracer.get().responseExhausted(
                 this.name(), fromUpstream.sender().name(), iteration
         );
+        logMessage(iteration);
         fromUpstream.sender().execute(actor -> actor.receiveFail(response, iteration));
     }
 
@@ -182,5 +202,138 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             }
         });
         return traversal;
+    }
+
+    protected abstract static class CachingRequestState<ANSWER> extends RequestState {
+
+        protected final Request fromUpstream;
+        protected final AnswerCache<ANSWER> answerCache;
+        protected final boolean mayCauseReiteration;
+        protected Poller<? extends Partial<?>> cacheReader;
+
+        public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration, boolean mayCauseReiteration) {
+            super(iteration);
+            this.fromUpstream = fromUpstream;
+            this.answerCache = answerCache;
+            this.mayCauseReiteration = mayCauseReiteration;
+            this.cacheReader = answerCache.reader(mayCauseReiteration)
+                    .flatMap(answer -> toUpstream(answer).filter(partial -> !optionallyDeduplicate(partial.conceptMap())));
+        }
+
+        public Optional<? extends Partial<?>> nextAnswer() {
+            return cacheReader.poll();
+        }
+
+        protected abstract FunctionalIterator<? extends Partial<?>> toUpstream(ANSWER conceptMap);
+
+        protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
+
+        public AnswerCache<ANSWER> answerCache() {
+            return answerCache;
+        }
+    }
+
+    // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
+    // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
+
+    public static class CacheRegister<ANSWER> {
+        Map<ConceptMap, AnswerCache<ANSWER>> answerCaches;
+        private int iteration;
+
+        public CacheRegister(int iteration) {
+            this.iteration = iteration;
+            this.answerCaches = new HashMap<>();
+        }
+
+        public boolean isRegistered(ConceptMap conceptMap) {
+            return answerCaches.containsKey(conceptMap);
+        }
+
+        public int iteration() {
+            return iteration;
+        }
+
+        public void nextIteration(int newIteration) {
+            assert newIteration > iteration;
+            iteration = newIteration;
+            answerCaches = new HashMap<>();
+        }
+
+        public AnswerCache<ANSWER> get(ConceptMap fromUpstream) {
+            return answerCaches.get(fromUpstream);
+        }
+
+        void register(ConceptMap fromUpstream, AnswerCache<ANSWER> answerCache) {
+            assert !answerCaches.containsKey(fromUpstream);
+            answerCaches.put(fromUpstream, answerCache);
+        }
+    }
+
+    public static class ProducedRecorder {
+        private final Set<ConceptMap> produced;
+
+        public ProducedRecorder() {
+            this(new HashSet<>());
+        }
+
+        public ProducedRecorder(Set<ConceptMap> produced) {
+            this.produced = produced;
+        }
+
+        public boolean record(ConceptMap conceptMap) {
+            if (produced.contains(conceptMap)) return true;
+            produced.add(conceptMap);
+            return false;
+        }
+
+        public boolean hasRecorded(ConceptMap conceptMap) { // TODO method shouldn't be needed
+            return produced.contains(conceptMap);
+        }
+
+        public Set<ConceptMap> recorded() {
+            return produced;
+        }
+    }
+
+    public static class DownstreamManager {
+        private final LinkedHashSet<Request> downstreams;
+        private Iterator<Request> downstreamSelector;
+
+        public DownstreamManager() {
+            this.downstreams = new LinkedHashSet<>();
+            this.downstreamSelector = downstreams.iterator();
+        }
+
+        public boolean hasDownstream() {
+            return !downstreams.isEmpty();
+        }
+
+        public Request nextDownstream() {
+            if (!downstreamSelector.hasNext()) downstreamSelector = downstreams.iterator();
+            return downstreamSelector.next();
+        }
+
+        public void addDownstream(Request request) {
+            assert !(downstreams.contains(request)) : "downstream answer producer already contains this request";
+
+            downstreams.add(request);
+            downstreamSelector = downstreams.iterator();
+        }
+
+        public void removeDownstream(Request request) {
+            boolean removed = downstreams.remove(request);
+            // only update the iterator when removing an element, to avoid resetting and reusing first request too often
+            // note: this is a large performance win when processing large batches of requests
+            if (removed) downstreamSelector = downstreams.iterator();
+        }
+
+        public void clearDownstreams() {
+            downstreams.clear();
+            downstreamSelector = Iterators.empty();
+        }
+
+        public boolean contains(Request downstreamRequest) {
+            return downstreams.contains(downstreamRequest);
+        }
     }
 }

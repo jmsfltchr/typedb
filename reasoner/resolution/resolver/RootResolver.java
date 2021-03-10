@@ -111,8 +111,8 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }
@@ -127,8 +127,8 @@ public interface RootResolver<TOP extends Top> {
         @Override
         boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
             RequestState requestState = requestStates.get(fromUpstream);
-            if (!requestState.hasProduced(upstreamAnswer.conceptMap())) {
-                requestState.recordProduced(upstreamAnswer.conceptMap());
+            if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
+                requestState.producedRecorder().record(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {
@@ -143,9 +143,8 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
-            return new RequestState(iteration, requestStatePrior.produced());
+            return new RequestState(iteration, requestStatePrior.producedRecorder().recorded());
         }
-
     }
 
     class Disjunction extends DisjunctionResolver<Disjunction> implements RootResolver<Finished> {
@@ -175,8 +174,8 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }
@@ -207,8 +206,8 @@ public interface RootResolver<TOP extends Top> {
         @Override
         protected boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
             RequestState requestState = requestStates.get(fromUpstream);
-            if (!requestState.hasProduced(upstreamAnswer.conceptMap())) {
-                requestState.recordProduced(upstreamAnswer.conceptMap());
+            if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
+                requestState.producedRecorder().record(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {
@@ -226,7 +225,7 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         protected RequestState requestStateForIteration(RequestState requestStatePrior, int newIteration) {
-            return new RequestState(newIteration, requestStatePrior.produced());
+            return new RequestState(newIteration, requestStatePrior.producedRecorder().recorded());
         }
     }
 
@@ -272,8 +271,8 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }
@@ -316,7 +315,7 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
-            return new RequestState(iteration, requestStatePrior.produced());
+            return new RequestState(iteration, requestStatePrior.producedRecorder().recorded());
         }
 
         @Override
@@ -332,7 +331,6 @@ public interface RootResolver<TOP extends Top> {
         grakn.core.pattern.Conjunction conjunction() {
             return conjunction;
         }
-
     }
 
 }

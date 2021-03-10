@@ -19,7 +19,6 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.concept.ConceptManager;
-import grakn.core.concept.answer.ConceptMap;
 import grakn.core.pattern.Disjunction;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
@@ -32,14 +31,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 import static grakn.core.common.iterator.Iterators.iterate;
 
-public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<RESOLVER>>
-        extends CompoundResolver<RESOLVER, DisjunctionResolver.RequestState> {
+public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<RESOLVER>> extends CompoundResolver<RESOLVER> {
 
     private static final Logger LOG = LoggerFactory.getLogger(Disjunction.class);
 
@@ -96,7 +93,7 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
             Compound.Nestable downstream = fromUpstream.partialAnswer().asCompound()
                     .filterToNestable(conjunctionRetrievedIds(conjunctionResolver));
             Request request = Request.create(driver(), conjunctionResolver, downstream);
-            requestState.addDownstreamProducer(request);
+            requestState.downstreamManager().addDownstream(request);
         }
         return requestState;
     }
@@ -113,7 +110,7 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
             Compound.Nestable downstream = fromUpstream.partialAnswer().asCompound()
                     .filterToNestable(conjunctionRetrievedIds(conjunctionResolver));
             Request request = Request.create(driver(), conjunctionResolver, downstream);
-            requestStateNextIteration.addDownstreamProducer(request);
+            requestStateNextIteration.downstreamManager().addDownstream(request);
         }
         return requestStateNextIteration;
     }
@@ -126,32 +123,6 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
                 .map(v -> v.id().asRetrievable()).toSet();
     }
 
-    static class RequestState extends CompoundResolver.RequestState {
-
-        private final Set<ConceptMap> produced;
-
-        public RequestState(int iteration) {
-            this(iteration, new HashSet<>());
-        }
-
-        public RequestState(int iteration, Set<ConceptMap> produced) {
-            super(iteration);
-            this.produced = produced;
-        }
-
-        public void recordProduced(ConceptMap conceptMap) {
-            produced.add(conceptMap);
-        }
-
-        public boolean hasProduced(ConceptMap conceptMap) {
-            return produced.contains(conceptMap);
-        }
-
-        public Set<ConceptMap> produced() {
-            return produced;
-        }
-    }
-
     public static class Nested extends DisjunctionResolver<Nested> {
 
         public Nested(Driver<Nested> driver, Disjunction disjunction, ResolverRegistry registry,
@@ -162,8 +133,8 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
 
         @Override
         protected void nextAnswer(Request fromUpstream, DisjunctionResolver.RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 failToUpstream(fromUpstream, iteration);
             }

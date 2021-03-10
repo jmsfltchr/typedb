@@ -57,7 +57,7 @@ public class ReasonerTest {
     private static RocksGrakn grakn;
 
     private RocksTransaction singleThreadElgTransaction(RocksSession session, Arguments.Transaction.Type transactionType) {
-        RocksTransaction transaction = session.transaction(transactionType, new Options.Transaction().infer(true));
+        RocksTransaction transaction = session.transaction(transactionType, new Options.Transaction().infer(true).parallel(false).traceInference(true));
         ActorExecutorGroup service = new ActorExecutorGroup(1, new NamedThreadFactory("grakn-core-actor"));
         transaction.reasoner().resolverRegistry().setExecutorService(service);
         return transaction;

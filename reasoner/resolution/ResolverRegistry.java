@@ -88,7 +88,7 @@ public class ResolverRegistry {
         this.ruleConditions = new ConcurrentHashMap<>();
         this.ruleConclusions = new ConcurrentHashMap<>();
         this.resolvers = new ConcurrentSet<>();
-        this.planner = new Planner(conceptMgr, logicMgr);
+        this.planner = new Planner();
         this.terminated = new AtomicBoolean(false);
         this.resolutionTracing = resolutionTracing;
     }

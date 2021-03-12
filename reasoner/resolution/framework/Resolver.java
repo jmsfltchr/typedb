@@ -192,7 +192,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             throw GraknException.of(ILLEGAL_STATE);
         }
 
-        public CachedRequestState<REQUEST_STATE> asExplored() {
+        public CachedRequestState<REQUEST_STATE> asCached() {
             throw GraknException.of(ILLEGAL_STATE);
         }
 
@@ -202,7 +202,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return false;
         }
 
-        public boolean isRequestState() {
+        public boolean isExploration() {
             return true; // TODO default should be false
         }
     }
@@ -238,12 +238,12 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         @Override
-        public boolean isRequestState() {
+        public boolean isExploration() {
             return false;
         }
 
         @Override
-        public CachedRequestState<REQUEST_STATE> asExplored() {
+        public CachedRequestState<REQUEST_STATE> asCached() {
             return this;
         }
 
@@ -252,24 +252,24 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected static class CompletableState {
 
         private final Set<ConceptMap> answers;
-        private boolean isComplete;
+        private boolean isExplored;
 
         CompletableState() {
             this.answers = new HashSet<>();
-            this.isComplete = false;
+            this.isExplored = false;
         }
 
         public Set<ConceptMap> completeSet() {
-            assert isComplete;
+            assert isExplored;
             return answers;
         }
 
         public boolean isFullyExplored() {
-            return isComplete;
+            return isExplored;
         }
 
-        public void setComplete() {
-            this.isComplete = true;
+        public void setFullyExplored() {
+            this.isExplored = true;
         }
 
         public void add(ConceptMap answer) {
@@ -296,11 +296,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return completableRequestStates.get(conceptMap);
         }
 
-        public void setComplete(ConceptMap conceptMap, int iteration) {
-            if (iteration == this.iteration) {
-                completableRequestStates.putIfAbsent(conceptMap, new CompletableState());
-                completableRequestStates.get(conceptMap).setComplete();
-            }
+        public void setFullyExplored(ConceptMap conceptMap) {
+            completableRequestStates.putIfAbsent(conceptMap, new CompletableState());
+            completableRequestStates.get(conceptMap).setFullyExplored();
         }
 
         public void remove(ConceptMap conceptMap) {

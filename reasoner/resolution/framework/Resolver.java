@@ -32,6 +32,7 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
+import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -41,8 +42,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
@@ -177,5 +180,142 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             }
         });
         return traversal;
+    }
+
+    protected abstract static class RequestState<REQUEST_STATE> {
+
+        public abstract boolean hasUpstreamAnswer();
+
+        public abstract FunctionalIterator<Partial<?>> upstreamAnswers();
+
+        public REQUEST_STATE asExploration() {
+            throw GraknException.of(ILLEGAL_STATE);
+        }
+
+        public CachedRequestState<REQUEST_STATE> asExplored() {
+            throw GraknException.of(ILLEGAL_STATE);
+        }
+
+        public abstract int iteration();
+
+        public boolean isCached() {
+            return false;
+        }
+
+        public boolean isRequestState() {
+            return true; // TODO default should be false
+        }
+    }
+
+    protected static class CachedRequestState<REQUEST_STATE> extends RequestState<REQUEST_STATE> {
+
+        private final FunctionalIterator<Partial<?>> newUpstreamAnswers;
+        private final int iteration;
+
+        public CachedRequestState(FunctionalIterator<Partial<?>> answers, int iteration) {
+            this.newUpstreamAnswers = answers;
+            this.iteration = iteration;
+        }
+
+        @Override
+        public boolean hasUpstreamAnswer() {
+            return newUpstreamAnswers.hasNext();
+        }
+
+        @Override
+        public FunctionalIterator<Partial<?>> upstreamAnswers() {
+            return newUpstreamAnswers;
+        }
+
+        @Override
+        public int iteration() {
+            return iteration;
+        }
+
+        @Override
+        public boolean isCached() {
+            return true;
+        }
+
+        @Override
+        public boolean isRequestState() {
+            return false;
+        }
+
+        @Override
+        public CachedRequestState<REQUEST_STATE> asExplored() {
+            return this;
+        }
+
+    }
+
+    protected static class CompletableState {
+
+        private final Set<ConceptMap> answers;
+        private boolean isComplete;
+
+        CompletableState() {
+            this.answers = new HashSet<>();
+            this.isComplete = false;
+        }
+
+        public Set<ConceptMap> completeSet() {
+            assert isComplete;
+            return answers;
+        }
+
+        public boolean isFullyExplored() {
+            return isComplete;
+        }
+
+        public void setComplete() {
+            this.isComplete = true;
+        }
+
+        public void add(ConceptMap answer) {
+            answers.add(answer);
+        }
+    }
+
+    protected static class CompletableStatesTracker {
+        HashMap<ConceptMap, CompletableState> completableRequestStates;
+        private int iteration;
+
+        public CompletableStatesTracker(int iteration) {
+            this.iteration = iteration;
+            this.completableRequestStates = new HashMap<>();
+        }
+
+        public void put(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
+            completableRequestStates.putIfAbsent(requestConceptMap, new CompletableState());
+            completableRequestStates.get(requestConceptMap).add(answerConceptMap);
+        }
+
+        public CompletableState get(ConceptMap conceptMap) {
+            completableRequestStates.putIfAbsent(conceptMap, new CompletableState());
+            return completableRequestStates.get(conceptMap);
+        }
+
+        public void setComplete(ConceptMap conceptMap, int iteration) {
+            if (iteration == this.iteration) {
+                completableRequestStates.putIfAbsent(conceptMap, new CompletableState());
+                completableRequestStates.get(conceptMap).setComplete();
+            }
+        }
+
+        public void remove(ConceptMap conceptMap) {
+            completableRequestStates.remove(conceptMap);
+        }
+
+        public int iteration() {
+            return iteration;
+        }
+
+        public void nextIteration(int newIteration) {
+            assert newIteration > iteration;
+            iteration = newIteration;
+            completableRequestStates = new HashMap<>();
+        }
+
     }
 }

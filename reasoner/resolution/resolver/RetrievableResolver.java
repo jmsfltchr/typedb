@@ -20,6 +20,7 @@ package grakn.core.reasoner.resolution.resolver;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.concept.ConceptManager;
+import grakn.core.concurrent.actor.Actor;
 import grakn.core.logic.resolvable.Retrievable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
@@ -32,9 +33,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
+import static grakn.core.common.iterator.Iterators.iterate;
 
 public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
@@ -42,6 +46,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RequestStates> requestStates;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CompletableStatesTracker> completableStatesTrackers;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean explanations) {
@@ -49,6 +54,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
               registry, traversalEngine, conceptMgr, explanations);
         this.retrievable = retrievable;
         this.requestStates = new HashMap<>();
+        this.completableStatesTrackers = new HashMap<>();
     }
 
     @Override
@@ -56,7 +62,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         LOG.trace("{}: received Request: {}", name(), fromUpstream);
         if (isTerminated()) return;
 
-        RequestStates requestStates = getOrUpdateRequestState(fromUpstream, iteration);
+        RequestStates requestStates = getOrReplaceRequestState(fromUpstream, iteration);
         if (iteration < requestStates.iteration()) {
             // short circuit old iteration failed messages to upstream
             failToUpstream(fromUpstream, iteration);
@@ -81,7 +87,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         throw GraknException.of(ILLEGAL_STATE);
     }
 
-    private RequestStates getOrUpdateRequestState(Request fromUpstream, int iteration) {
+    private RequestStates getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!requestStates.containsKey(fromUpstream)) {
             requestStates.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
@@ -115,14 +121,16 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class RequestStates {
+    private static class RequestStates extends RequestState<RequestStates> {
 
         private final FunctionalIterator<Partial<?>> newUpstreamAnswers;
         private final int iteration;
+        private final Set<Partial<?>> produced;
 
         public RequestStates(FunctionalIterator<Partial<?>> upstreamAnswers, int iteration) {
             this.newUpstreamAnswers = upstreamAnswers;
             this.iteration = iteration;
+            this.produced = new HashSet<>();
         }
 
         public boolean hasUpstreamAnswer() {
@@ -130,12 +138,18 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
 
         public FunctionalIterator<Partial<?>> upstreamAnswers() {
-            return newUpstreamAnswers;
+            return iterate(newUpstreamAnswers.map(i -> {
+                produced.add(i);
+                return i;
+            }));
         }
 
         public int iteration() {
             return iteration;
         }
 
+        public Set<Partial<?>> produced() {
+            return produced;
+        }
     }
 }

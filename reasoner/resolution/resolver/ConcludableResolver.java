@@ -229,8 +229,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private RequestState<ExplorationRequestState> getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!requestStates.containsKey(fromUpstream)) {
             RequestState<ExplorationRequestState> newRequestState = requestStateCreate(fromUpstream, iteration);
-            if (newRequestState.isCached()) return newRequestState;
-            requestStates.put(fromUpstream, newRequestState.asExploration());
+            requestStates.put(fromUpstream, newRequestState);
         } else {
             RequestState<ExplorationRequestState> requestState = this.requestStates.get(fromUpstream);
             assert requestState.iteration() == iteration || requestState.iteration() + 1 == iteration;

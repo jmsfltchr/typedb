@@ -225,15 +225,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return iterate(traversalIterator(conceptMap)).link(iterate(downstreamRequestStates.get(conceptMap).completeSet()));
         }
 
-//        public FunctionalIterator<ConceptMap> iterateExplored(ConceptMap conceptMap) {
-//            assert traversalExplored(conceptMap);
-//            FunctionalIterator<ConceptMap> iterator = iterate(traversalRequestStates.get(conceptMap).completeSet());
-//            if (fullyExplored(conceptMap)) {
-//                iterator.link(iterate(downstreamRequestStates.get(conceptMap).completeSet()));
-//            }
-//            return iterator;
-//        }
-
         public void setTraversalExplored(ConceptMap conceptMap) {
             traversalRequestStates.putIfAbsent(conceptMap, new ExplorationState());
             traversalRequestStates.get(conceptMap).setExplored();

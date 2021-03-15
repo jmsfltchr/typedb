@@ -288,7 +288,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         private final Set<ConceptMap> produced;
 
         public ProducedRecorder() {
-            produced = new HashSet<>();
+            this(new HashSet<>());
+        }
+
+        public ProducedRecorder(Set<ConceptMap> produced) {
+            this.produced = produced;
         }
 
         public void recordProduced(ConceptMap conceptMap) {

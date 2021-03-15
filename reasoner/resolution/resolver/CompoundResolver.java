@@ -123,7 +123,7 @@ public abstract class CompoundResolver<
             this.iteration = iteration;
             this.produced = produced;
             this.downstreamManager = new DownstreamManager();
-            this.producedRecorder = new ProducedRecorder();
+            this.producedRecorder = new ProducedRecorder(produced);
         }
 
         public DownstreamManager downstreamManager() {

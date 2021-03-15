@@ -209,12 +209,12 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             requestState.producedRecorder().recordProduced(upstreamAnswer.conceptMap());
             answerFound(upstreamAnswer, fromUpstream, iteration);
         } else {
+            requestStatesTrackers.putIfAbsent(fromUpstream.partialAnswer().root(), new RequestStatesTracker(iteration));
+            requestStatesTrackers.get(fromUpstream.partialAnswer().root()).setTraversalExplored(fromUpstream.partialAnswer().conceptMap());
             if (requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
-                RecursionState recursionState = recursionStates.get(fromUpstream.partialAnswer().root());
-                if (!recursionState.hasReceived(fromUpstream.partialAnswer().conceptMap())) {
-                    requestStatesTrackers.putIfAbsent(fromUpstream.partialAnswer().root(), new RequestStatesTracker(iteration));
+                if (requestState.exploringRules()) {
                     assert requestStatesTrackers.get(fromUpstream.partialAnswer().root()).iteration() == iteration;
                     requestStatesTrackers.get(fromUpstream.partialAnswer().root()).setDownstreamExplored(fromUpstream.partialAnswer().conceptMap());
                 }
@@ -295,6 +295,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             boolean singleAnswerRequired = fromUpstream.partialAnswer().conceptMap().concepts().keySet().containsAll(unboundVars());
             ExplorationRequestState requestState = new ExplorationRequestState(upstreamAnswers, iteration, singleAnswerRequired);
             if (!recursionState.hasReceived(fromUpstream.partialAnswer().conceptMap())) {
+                requestState.exploringRules(true);
                 registerRules(fromUpstream, requestState);
                 recursionState.recordReceived(fromUpstream.partialAnswer().conceptMap());
             }
@@ -363,6 +364,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         private final boolean singleAnswerRequired;
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
+        private boolean exploringRules;
 
         public ExplorationRequestState(FunctionalIterator<Partial<?>> upstreamAnswers, int iteration, boolean singleAnswerRequired) {
             this(upstreamAnswers, iteration, new DownstreamManager(), new ProducedRecorder(), singleAnswerRequired);
@@ -376,10 +378,19 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             this.singleAnswerRequired = singleAnswerRequired;
             this.downstreamManager = downstreamManager;
             this.producedRecorder = producedRecorder;
+            this.exploringRules = false;
         }
 
         public ExplorationRequestState update(FunctionalIterator<Partial<?>> upstreamAnswers) {
             return new ExplorationRequestState(upstreamAnswers, iteration, downstreamManager, producedRecorder, singleAnswerRequired);
+        }
+
+        public boolean exploringRules() {
+            return exploringRules;
+        }
+
+        public void exploringRules(boolean exploringRules) {
+            this.exploringRules = exploringRules;
         }
 
         @Override

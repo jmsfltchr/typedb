@@ -46,7 +46,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RequestStates> requestStates;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CompletableStatesTracker> completableStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, RequestStatesTracker> completableStatesTrackers;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean explanations) {
@@ -121,7 +121,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class RequestStates extends RequestState<RequestStates> {
+    private static class RequestStates {
 
         private final FunctionalIterator<Partial<?>> newUpstreamAnswers;
         private final int iteration;

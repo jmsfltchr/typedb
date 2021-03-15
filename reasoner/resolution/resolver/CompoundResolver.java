@@ -30,8 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -85,7 +83,7 @@ public abstract class CompoundResolver<
             failToUpstream(fromUpstream, iteration);
             return;
         }
-        requestState.removeDownstreamProducer(fromDownstream.sourceRequest());
+        requestState.downstreamManager().removeDownstream(fromDownstream.sourceRequest());
         nextAnswer(fromUpstream, requestState, iteration);
     }
 
@@ -113,9 +111,9 @@ public abstract class CompoundResolver<
     static class RequestState {
 
         private final int iteration;
-        private final LinkedHashSet<Request> downstreamProducer;
         private final Set<ConceptMap> produced;
-        private Iterator<Request> downstreamProducerSelector;
+        private final DownstreamManager downstreamManager;
+        private final ProducedRecorder producedRecorder;
 
         public RequestState(int iteration) {
             this(iteration, new HashSet<>());
@@ -123,48 +121,21 @@ public abstract class CompoundResolver<
 
         public RequestState(int iteration, Set<ConceptMap> produced) {
             this.iteration = iteration;
-            downstreamProducer = new LinkedHashSet<>();
-            downstreamProducerSelector = downstreamProducer.iterator();
             this.produced = produced;
+            this.downstreamManager = new DownstreamManager();
+            this.producedRecorder = new ProducedRecorder();
+        }
+
+        public DownstreamManager downstreamManager() {
+            return downstreamManager;
         }
 
         public int iteration() {
             return iteration;
         }
 
-        public void recordProduced(ConceptMap conceptMap) {
-            produced.add(conceptMap);
-        }
-
-        public boolean hasProduced(ConceptMap conceptMap) {
-            return produced.contains(conceptMap);
-        }
-
-        public Set<ConceptMap> produced() {
-            return produced;
-        }
-
-        public boolean hasDownstreamProducer() {
-            return !downstreamProducer.isEmpty();
-        }
-
-        public Request nextDownstreamProducer() {
-            if (!downstreamProducerSelector.hasNext()) downstreamProducerSelector = downstreamProducer.iterator();
-            return downstreamProducerSelector.next();
-        }
-
-        public void addDownstreamProducer(Request request) {
-            assert !(downstreamProducer.contains(request)) : "downstream answer producer already contains this request";
-
-            downstreamProducer.add(request);
-            downstreamProducerSelector = downstreamProducer.iterator();
-        }
-
-        public void removeDownstreamProducer(Request request) {
-            boolean removed = downstreamProducer.remove(request);
-            // only update the iterator when removing an element, to avoid resetting and reusing first request too often
-            // note: this is a large performance win when processing large batches of requests
-            if (removed) downstreamProducerSelector = downstreamProducer.iterator();
+        public ProducedRecorder producedRecorder() {
+            return producedRecorder;
         }
     }
 }

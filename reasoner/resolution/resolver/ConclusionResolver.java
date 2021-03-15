@@ -38,8 +38,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +56,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private final Map<Request, RequestState> requestStates;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CompletableStatesTracker> completableStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, RequestStatesTracker> completableStatesTrackers;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               Driver<ResolutionRecorder> resolutionRecorder, TraversalEngine traversalEngine,
@@ -125,7 +123,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             return;
         }
 
-        requestState.removeDownstream(fromDownstream.sourceRequest());
+        requestState.downstreamManager().removeDownstream(fromDownstream.sourceRequest());
         nextAnswer(fromUpstream, requestState, iteration);
     }
 
@@ -150,8 +148,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Optional<Partial<?>> answer = requestState.nextResponse();
         if (answer.isPresent()) {
             answerToUpstream(answer.get(), fromUpstream, iteration);
-        } else if (requestState.hasDownstream()) {
-            requestFromDownstream(requestState.nextDownstream(), fromUpstream, iteration);
+        } else if (requestState.downstreamManager().hasDownstream()) {
+            requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
             failToUpstream(fromUpstream, iteration);
         }
@@ -185,12 +183,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.concepts().size() &&
                 partialAnswer.concepts().containsKey(conclusion.generating().get().id())) {
             FunctionalIterator<Partial.Filtered> completedAnswers = candidateAnswers(fromUpstream, partialAnswer);
-            completedAnswers.forEachRemaining(answer -> requestState.addDownstream(Request.create(driver(), ruleResolver,
+            completedAnswers.forEachRemaining(answer -> requestState.downstreamManager().addDownstream(Request.create(driver(), ruleResolver,
                                                                                                   answer)));
         } else {
             Set<Identifier.Variable.Retrievable> named = iterate(conclusion.retrievableIds()).filter(Identifier::isName).toSet();
             Partial.Filtered downstreamAnswer = fromUpstream.partialAnswer().filterToDownstream(named, ruleResolver);
-            requestState.addDownstream(Request.create(driver(), ruleResolver, downstreamAnswer));
+            requestState.downstreamManager().addDownstream(Request.create(driver(), ruleResolver, downstreamAnswer));
         }
 
         return requestState;
@@ -208,33 +206,35 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         return name() + ": then " + conclusion.rule().then();
     }
 
-    private static class RequestState extends Resolver.RequestState<RequestState> {
+    private static class RequestState {
 
         private final List<FunctionalIterator<Partial<?>>> materialisedAnswers;
-        private final LinkedHashSet<Request> downstreams;
-        private Iterator<Request> downstreamProducerSelector;
         private final int iteration;
         private final Set<Partial<?>> produced;
+        private final DownstreamManager downstreamManager;
 
         public RequestState(int iteration) {
             this.materialisedAnswers = new LinkedList<>();
-            this.downstreams = new LinkedHashSet<>();
             this.iteration = iteration;
-            this.downstreamProducerSelector = downstreams.iterator();
             this.produced = new HashSet<>();
+            this.downstreamManager = new DownstreamManager();
         }
 
-        @Override
-        public boolean hasUpstreamAnswer() {
-            // TODO Collapse with hasResponse()
-            return false;
+        public DownstreamManager downstreamManager() {
+            return downstreamManager;
         }
 
-        @Override
-        public FunctionalIterator<Partial<?>> upstreamAnswers() {
-            // TODO Collapse with nextResponse()
-            return null;
-        }
+//        @Override
+//        public boolean hasUpstreamAnswer() {
+//            // TODO Collapse with hasResponse()
+//            return false;
+//        }
+//
+//        @Override
+//        public FunctionalIterator<Partial<?>> upstreamAnswers() {
+//            // TODO Collapse with nextResponse()
+//            return null;
+//        }
 
         public int iteration() {
             return iteration;
@@ -258,32 +258,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                 materialisedAnswers.remove(0);
             }
             return !materialisedAnswers.isEmpty();
-        }
-
-        public boolean hasDownstream() {
-            return !downstreams.isEmpty();
-        }
-
-        public Request nextDownstream() {
-            if (!downstreamProducerSelector.hasNext()) downstreamProducerSelector = downstreams.iterator();
-            return downstreamProducerSelector.next();
-        }
-
-        public void removeDownstream(Request request) {
-            boolean removed = downstreams.remove(request);
-            // only update the iterator when removing an element, to avoid resetting and reusing first request too often
-            // note: this is a large performance win when processing large batches of requests
-            if (removed) downstreamProducerSelector = downstreams.iterator();
-        }
-
-        public void addDownstream(Request request) {
-            assert !(downstreams.contains(request)) : "downstream answer producer already contains this request";
-            downstreams.add(request);
-            downstreamProducerSelector = downstreams.iterator();
-        }
-
-        public Set<Partial<?>> produced() {
-            return produced;
         }
     }
 }

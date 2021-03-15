@@ -96,7 +96,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         // TODO: this is a bit of a hack, we want requests to a negation to be "single use", otherwise we can end up in an infinite loop
         // TODO: where the request to the negation never gets removed and we constantly re-request from it!
         // TODO: this could be either implemented with a different response type: FinalAnswer, or splitting Request into ReusableRequest vs SingleRequest
-        if (plan.get(toDownstream.planIndex()).isNegated()) requestState.removeDownstreamProducer(toDownstream);
+        if (plan.get(toDownstream.planIndex()).isNegated()) requestState.downstreamManager().removeDownstream(toDownstream);
 
         if (plan.isLast(fromDownstream.planIndex())) {
             Optional<AnswerState> upstreamAnswer = toUpstreamAnswer(fromDownstream.answer());
@@ -109,8 +109,8 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
     private boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
         RequestState requestState = requestStates.get(fromUpstream);
-        if (!requestState.hasProduced(upstreamAnswer.conceptMap())) {
-            requestState.recordProduced(upstreamAnswer.conceptMap());
+        if (!requestState.producedRecorder().hasProduced(upstreamAnswer.conceptMap())) {
+            requestState.producedRecorder().recordProduced(upstreamAnswer.conceptMap());
             answerToUpstream(upstreamAnswer, fromUpstream, iteration);
             return true;
         } else {
@@ -123,7 +123,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         ResolverRegistry.ResolverView nextPlannedDownstream = downstreamResolvers.get(plan.get(nextResolverIndex));
         Partial<?> downstream = forDownstreamResolver(nextPlannedDownstream, fromDownstream.answer());
         Request downstreamRequest = Request.create(driver(), nextPlannedDownstream.resolver(), downstream, nextResolverIndex);
-        requestState.addDownstreamProducer(downstreamRequest);
+        requestState.downstreamManager().addDownstream(downstreamRequest);
         requestFromDownstream(downstreamRequest, fromUpstream, iteration);
     }
 
@@ -142,7 +142,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
             return;
         }
 
-        requestState.removeDownstreamProducer(fromDownstream.sourceRequest());
+        requestState.downstreamManager().removeDownstream(fromDownstream.sourceRequest());
         nextAnswer(fromUpstream, requestState, iteration);
     }
 
@@ -182,7 +182,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         ResolverRegistry.ResolverView childResolver = downstreamResolvers.get(plan.get(0));
         Partial<?> downstream = forDownstreamResolver(childResolver, fromUpstream.partialAnswer());
         Request toDownstream = Request.create(driver(), childResolver.resolver(), downstream, 0);
-        requestState.addDownstreamProducer(toDownstream);
+        requestState.downstreamManager().addDownstream(toDownstream);
         return requestState;
     }
 
@@ -198,7 +198,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         ResolverRegistry.ResolverView childResolver = downstreamResolvers.get(plan.get(0));
         Partial<?> downstream = forDownstreamResolver(childResolver, fromUpstream.partialAnswer());
         Request toDownstream = Request.create(driver(), childResolver.resolver(), downstream, 0);
-        requestStateNextIteration.addDownstreamProducer(toDownstream);
+        requestStateNextIteration.downstreamManager().addDownstream(toDownstream);
         return requestStateNextIteration;
     }
 
@@ -282,8 +282,8 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
         @Override
         protected void nextAnswer(Request fromUpstream, ConjunctionResolver.RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 failToUpstream(fromUpstream, iteration);
             }

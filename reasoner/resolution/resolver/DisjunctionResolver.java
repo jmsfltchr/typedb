@@ -95,7 +95,7 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
             Filtered downstream = fromUpstream.partialAnswer()
                     .filterToDownstream(conjunctionRetrievedIds(conjunctionResolver), conjunctionResolver);
             Request request = Request.create(driver(), conjunctionResolver, downstream);
-            requestState.addDownstreamProducer(request);
+            requestState.downstreamManager().addDownstream(request);
         }
         return requestState;
     }
@@ -112,7 +112,7 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
             Filtered downstream = fromUpstream.partialAnswer()
                     .filterToDownstream(conjunctionRetrievedIds(conjunctionResolver), conjunctionResolver);
             Request request = Request.create(driver(), conjunctionResolver, downstream);
-            requestStateNextIteration.addDownstreamProducer(request);
+            requestStateNextIteration.downstreamManager().addDownstream(request);
         }
         return requestStateNextIteration;
     }
@@ -136,8 +136,8 @@ public abstract class DisjunctionResolver<RESOLVER extends DisjunctionResolver<R
 
         @Override
         protected void nextAnswer(Request fromUpstream, DisjunctionResolver.RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 failToUpstream(fromUpstream, iteration);
             }

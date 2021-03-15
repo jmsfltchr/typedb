@@ -32,7 +32,6 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
-import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -43,12 +42,15 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
+import static grakn.core.common.iterator.Iterators.iterate;
 import static grakn.core.common.parameters.Arguments.Query.Producer.INCREMENTAL;
 
 public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Actor<RESOLVER> {
@@ -182,127 +184,64 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected abstract static class RequestState<REQUEST_STATE> {
-
-        public abstract boolean hasUpstreamAnswer();
-
-        public abstract FunctionalIterator<Partial<?>> upstreamAnswers();
-
-        public REQUEST_STATE asExploration() {
-            throw GraknException.of(ILLEGAL_STATE);
-        }
-
-        public CachedRequestState<REQUEST_STATE> asCached() {
-            throw GraknException.of(ILLEGAL_STATE);
-        }
-
-        public abstract int iteration();
-
-        public boolean isCached() {
-            return false;
-        }
-
-        public boolean isExploration() {
-            return true; // TODO default should be false
-        }
-    }
-
-    protected static class CachedRequestState<REQUEST_STATE> extends RequestState<REQUEST_STATE> {
-
-        private final FunctionalIterator<Partial<?>> newUpstreamAnswers;
-        private final int iteration;
-
-        public CachedRequestState(FunctionalIterator<Partial<?>> answers, int iteration) {
-            this.newUpstreamAnswers = answers;
-            this.iteration = iteration;
-        }
-
-        @Override
-        public boolean hasUpstreamAnswer() {
-            return newUpstreamAnswers.hasNext();
-        }
-
-        @Override
-        public FunctionalIterator<Partial<?>> upstreamAnswers() {
-            return newUpstreamAnswers;
-        }
-
-        @Override
-        public int iteration() {
-            return iteration;
-        }
-
-        @Override
-        public boolean isCached() {
-            return true;
-        }
-
-        @Override
-        public boolean isExploration() {
-            return false;
-        }
-
-        @Override
-        public CachedRequestState<REQUEST_STATE> asCached() {
-            return this;
-        }
-
-    }
-
-    protected static class CompletableState {
-
-        private final Set<ConceptMap> answers;
-        private boolean isExplored;
-
-        CompletableState() {
-            this.answers = new HashSet<>();
-            this.isExplored = false;
-        }
-
-        public Set<ConceptMap> completeSet() {
-            assert isExplored;
-            return answers;
-        }
-
-        public boolean isFullyExplored() {
-            return isExplored;
-        }
-
-        public void setFullyExplored() {
-            this.isExplored = true;
-        }
-
-        public void add(ConceptMap answer) {
-            answers.add(answer);
-        }
-    }
-
-    protected static class CompletableStatesTracker {
-        HashMap<ConceptMap, CompletableState> completableRequestStates;
+    protected static class RequestStatesTracker {
+        HashMap<ConceptMap, ExplorationState> traversalRequestStates;
+        HashMap<ConceptMap, ExplorationState> downstreamRequestStates;
         private int iteration;
 
-        public CompletableStatesTracker(int iteration) {
+        public RequestStatesTracker(int iteration) {
             this.iteration = iteration;
-            this.completableRequestStates = new HashMap<>();
+            this.traversalRequestStates = new HashMap<>();
+            this.downstreamRequestStates = new HashMap<>();
         }
 
-        public void put(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
-            completableRequestStates.putIfAbsent(requestConceptMap, new CompletableState());
-            completableRequestStates.get(requestConceptMap).add(answerConceptMap);
+        public void recordFromTraversal(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
+            traversalRequestStates.putIfAbsent(requestConceptMap, new ExplorationState());
+            traversalRequestStates.get(requestConceptMap).add(answerConceptMap);
         }
 
-        public CompletableState get(ConceptMap conceptMap) {
-            completableRequestStates.putIfAbsent(conceptMap, new CompletableState());
-            return completableRequestStates.get(conceptMap);
+        public void recordFromDownstream(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
+            downstreamRequestStates.putIfAbsent(requestConceptMap, new ExplorationState());
+            downstreamRequestStates.get(requestConceptMap).add(answerConceptMap);
         }
 
-        public void setFullyExplored(ConceptMap conceptMap) {
-            completableRequestStates.putIfAbsent(conceptMap, new CompletableState());
-            completableRequestStates.get(conceptMap).setFullyExplored();
+        public boolean traversalExplored(ConceptMap conceptMap) {
+            traversalRequestStates.putIfAbsent(conceptMap, new ExplorationState());
+            return traversalRequestStates.get(conceptMap).isExplored();
         }
 
-        public void remove(ConceptMap conceptMap) {
-            completableRequestStates.remove(conceptMap);
+        public boolean fullyExplored(ConceptMap conceptMap) {
+            if (!traversalExplored(conceptMap)) return false;
+            downstreamRequestStates.putIfAbsent(conceptMap, new ExplorationState());
+            return downstreamRequestStates.get(conceptMap).isExplored();
+        }
+
+        public FunctionalIterator<ConceptMap> traversalIterator(ConceptMap conceptMap) {
+            return iterate(traversalRequestStates.get(conceptMap).completeSet());
+        }
+
+        public FunctionalIterator<ConceptMap> completeIterator(ConceptMap conceptMap) {
+            assert fullyExplored(conceptMap);
+            return iterate(traversalIterator(conceptMap)).link(iterate(downstreamRequestStates.get(conceptMap).completeSet()));
+        }
+
+//        public FunctionalIterator<ConceptMap> iterateExplored(ConceptMap conceptMap) {
+//            assert traversalExplored(conceptMap);
+//            FunctionalIterator<ConceptMap> iterator = iterate(traversalRequestStates.get(conceptMap).completeSet());
+//            if (fullyExplored(conceptMap)) {
+//                iterator.link(iterate(downstreamRequestStates.get(conceptMap).completeSet()));
+//            }
+//            return iterator;
+//        }
+
+        public void setTraversalExplored(ConceptMap conceptMap) {
+            traversalRequestStates.putIfAbsent(conceptMap, new ExplorationState());
+            traversalRequestStates.get(conceptMap).setExplored();
+        }
+
+        public void setDownstreamExplored(ConceptMap conceptMap) {
+            downstreamRequestStates.putIfAbsent(conceptMap, new ExplorationState());
+            downstreamRequestStates.get(conceptMap).setExplored();
         }
 
         public int iteration() {
@@ -312,8 +251,94 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         public void nextIteration(int newIteration) {
             assert newIteration > iteration;
             iteration = newIteration;
-            completableRequestStates = new HashMap<>();
+            downstreamRequestStates = new HashMap<>();
+            traversalRequestStates = new HashMap<>();
         }
 
+        private static class ExplorationState {
+
+            private final Set<ConceptMap> answers;
+            private boolean isExplored;
+
+            ExplorationState() {
+                this.answers = new HashSet<>();
+                this.isExplored = false;
+            }
+
+            public Set<ConceptMap> completeSet() {
+                assert isExplored;
+                return answers;
+            }
+
+            boolean isExplored() {
+                return isExplored;
+            }
+
+            void setExplored() {
+                this.isExplored = true;
+            }
+
+            void add(ConceptMap answer) {
+                answers.add(answer);
+            }
+        }
+    }
+
+    public static class ProducedRecorder {
+        private final Set<ConceptMap> produced;
+
+        public ProducedRecorder() {
+            produced = new HashSet<>();
+        }
+
+        public void recordProduced(ConceptMap conceptMap) {
+            produced.add(conceptMap);
+        }
+
+        public boolean hasProduced(ConceptMap conceptMap) {
+            return produced.contains(conceptMap);
+        }
+
+        public Set<ConceptMap> produced() {
+            return produced;
+        }
+    }
+
+    public static class DownstreamManager {
+        private final LinkedHashSet<Request> downstreams;
+        private Iterator<Request> downstreamSelector;
+
+        public DownstreamManager() {
+            this.downstreams = new LinkedHashSet<>();
+            this.downstreamSelector = downstreams.iterator();
+        }
+
+        public boolean hasDownstream() {
+            return !downstreams.isEmpty();
+        }
+
+        public Request nextDownstream() {
+            if (!downstreamSelector.hasNext()) downstreamSelector = downstreams.iterator();
+            return downstreamSelector.next();
+        }
+
+        public void addDownstream(Request request) {
+            assert !(downstreams.contains(request)) : "downstream answer producer already contains this request";
+
+            downstreams.add(request);
+            downstreamSelector = downstreams.iterator();
+        }
+
+        public void removeDownstream(Request request) {
+            boolean removed = downstreams.remove(request);
+            // only update the iterator when removing an element, to avoid resetting and reusing first request too often
+            // note: this is a large performance win when processing large batches of requests
+            if (removed) downstreamSelector = downstreams.iterator();
+        }
+
+        public void clearDownstreams() {
+            downstreams.clear();
+            downstreamSelector = Iterators.empty();
+        }
     }
 }

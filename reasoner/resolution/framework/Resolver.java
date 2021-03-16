@@ -112,10 +112,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return requestRouter.get(toDownstream);
     }
 
-    private void logMessage() {
+    private void logMessage(int iteration) {
         int i = messageCount.incrementAndGet();
         if (i % 100 == 0) {
-            LOG.info("Message count: {}", i);
+            LOG.info("Message count: {} (iteration {})", i, iteration);
         }
     }
 
@@ -126,7 +126,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         // TODO: we may overwrite if multiple identical requests are sent, when to clean up?
         requestRouter.put(request, fromUpstream);
         Driver<? extends Resolver<?>> receiver = request.receiver();
-        logMessage();
+        logMessage(iteration);
         receiver.execute(actor -> actor.receiveRequest(request, iteration));
     }
 
@@ -136,7 +136,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         LOG.trace("{} : Sending a new Response.Answer to upstream", name());
         if (resolutionTracing) ResolutionTracer.get().responseAnswer(this.name(), fromUpstream.sender().name(), iteration,
                                                                      response.asAnswer().answer().conceptMap().concepts().keySet().toString());
-        logMessage();
+        logMessage(iteration);
         fromUpstream.sender().execute(actor -> actor.receiveAnswer(response, iteration));
     }
 
@@ -144,7 +144,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         Response.Fail response = new Response.Fail(fromUpstream);
         LOG.trace("{} : Sending a new Response.Answer to upstream", name());
         if (resolutionTracing) ResolutionTracer.get().responseExhausted(this.name(), fromUpstream.sender().name(), iteration);
-        logMessage();
+        logMessage(iteration);
         fromUpstream.sender().execute(actor -> actor.receiveFail(response, iteration));
     }
 

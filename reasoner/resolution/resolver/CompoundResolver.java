@@ -30,8 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -140,10 +139,10 @@ public abstract class CompoundResolver<
     }
 
     public static class DepthFirstDownstreamManager {
-        private final List<Request> downstreams;
+        private final LinkedHashSet<Request> downstreams;
 
         public DepthFirstDownstreamManager() {
-            this.downstreams = new LinkedList<>();
+            this.downstreams = new LinkedHashSet<>();
         }
 
         public boolean hasDownstream() {
@@ -151,7 +150,7 @@ public abstract class CompoundResolver<
         }
 
         public Request nextDownstream() {
-            return this.downstreams.get(0);
+            return this.downstreams.iterator().next();
         }
 
         public void addDownstream(Request request) {

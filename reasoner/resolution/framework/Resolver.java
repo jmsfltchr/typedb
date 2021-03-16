@@ -47,6 +47,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
@@ -62,6 +63,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected final ConceptManager conceptMgr;
     private final boolean resolutionTracing;
     private boolean terminated;
+    private static final AtomicInteger messageCount = new AtomicInteger(0);
 
     protected Resolver(Driver<RESOLVER> driver, String name, ResolverRegistry registry, TraversalEngine traversalEngine,
                        ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -109,6 +111,13 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return requestRouter.get(toDownstream);
     }
 
+    private void logMessage() {
+        int i = messageCount.incrementAndGet();
+        if (i % 100 == 0) {
+            LOG.info("Message count: {}", i);
+        }
+    }
+
     protected void requestFromDownstream(Request request, Request fromUpstream, int iteration) {
         LOG.trace("{} : Sending a new answer Request to downstream: {}", name(), request);
         if (resolutionTracing) ResolutionTracer.get().request(this.name(), request.receiver().name(), iteration,
@@ -116,6 +125,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         // TODO: we may overwrite if multiple identical requests are sent, when to clean up?
         requestRouter.put(request, fromUpstream);
         Driver<? extends Resolver<?>> receiver = request.receiver();
+        logMessage();
         receiver.execute(actor -> actor.receiveRequest(request, iteration));
     }
 
@@ -125,6 +135,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         LOG.trace("{} : Sending a new Response.Answer to upstream", name());
         if (resolutionTracing) ResolutionTracer.get().responseAnswer(this.name(), fromUpstream.sender().name(), iteration,
                                                                      response.asAnswer().answer().conceptMap().concepts().keySet().toString());
+        logMessage();
         fromUpstream.sender().execute(actor -> actor.receiveAnswer(response, iteration));
     }
 
@@ -132,6 +143,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         Response.Fail response = new Response.Fail(fromUpstream);
         LOG.trace("{} : Sending a new Response.Answer to upstream", name());
         if (resolutionTracing) ResolutionTracer.get().responseExhausted(this.name(), fromUpstream.sender().name(), iteration);
+        logMessage();
         fromUpstream.sender().execute(actor -> actor.receiveFail(response, iteration));
     }
 

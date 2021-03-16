@@ -23,7 +23,6 @@ import grakn.core.concept.answer.ConceptMap;
 import grakn.core.rocks.RocksGrakn;
 import grakn.core.rocks.RocksSession;
 import grakn.core.rocks.RocksTransaction;
-import grakn.core.test.integration.util.Util;
 import graql.lang.Graql;
 import org.junit.After;
 import org.junit.Before;
@@ -38,11 +37,9 @@ import static junit.framework.TestCase.assertEquals;
 
 public class GrablTest {
 
-//    private static final Path dataDir = Paths.get(System.getProperty("user.dir")).resolve("resolver-manager-test");
-//    private static final Path dataDir = Paths.get(System.getProperty("user.dir")).resolve("grabl-test");
-    private static final Path dataDir = Paths.get("/Users/jamesfletcher/programming/grakn/test/integration/reasoner/resolution/data/grabl");
+    private static final Path dataDir = Paths.get("/Users/jamesfletcher/programming/grakn/test/integration/reasoner/resolution/data");
     private static final Path logDir = dataDir.resolve("logs");
-    private static final Options.Database options = new Options.Database().dataDir(dataDir).logsDir(logDir);
+    private static final Options.Database options = new Options.Database().graknDir(Paths.get(System.getProperty("user.dir"))).dataDir(dataDir).logsDir(logDir);
     private static final String database = "grabl";
     private static RocksGrakn grakn;
     private static RocksSession session;

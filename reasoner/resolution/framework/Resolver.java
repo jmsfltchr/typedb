@@ -49,7 +49,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
 import static grakn.core.common.iterator.Iterators.iterate;
@@ -198,55 +197,32 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     }
 
     protected static class RequestStatesTracker {
-        HashMap<ConceptMap, ExplorationState> traversalRequestStates;
-        HashMap<ConceptMap, ExplorationState> downstreamRequestStates;
+        HashMap<ConceptMap, ExplorationState> exploredRequestStates;
         private int iteration;
 
         public RequestStatesTracker(int iteration) {
             this.iteration = iteration;
-            this.traversalRequestStates = new HashMap<>();
-            this.downstreamRequestStates = new HashMap<>();
+            this.exploredRequestStates = new HashMap<>();
         }
 
-        public void recordFromTraversal(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
-            traversalRequestStates.putIfAbsent(requestConceptMap, new ExplorationState());
-            traversalRequestStates.get(requestConceptMap).add(answerConceptMap);
-        }
-
-        public void recordFromDownstream(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
-            downstreamRequestStates.putIfAbsent(requestConceptMap, new ExplorationState());
-            downstreamRequestStates.get(requestConceptMap).add(answerConceptMap);
-        }
-
-        public boolean traversalExplored(ConceptMap conceptMap) {
-            traversalRequestStates.putIfAbsent(conceptMap, new ExplorationState());
-            return traversalRequestStates.get(conceptMap).isExplored();
+        public void record(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
+            exploredRequestStates.putIfAbsent(requestConceptMap, new ExplorationState());
+            exploredRequestStates.get(requestConceptMap).add(answerConceptMap);
         }
 
         public boolean fullyExplored(ConceptMap conceptMap) {
-            if (!traversalExplored(conceptMap)) return false;
-            downstreamRequestStates.putIfAbsent(conceptMap, new ExplorationState());
-            return downstreamRequestStates.get(conceptMap).isExplored();
-        }
-
-        public FunctionalIterator<ConceptMap> traversalIterator(ConceptMap conceptMap) {
-            return iterate(traversalRequestStates.get(conceptMap).completeSet());
+            exploredRequestStates.putIfAbsent(conceptMap, new ExplorationState());
+            return exploredRequestStates.get(conceptMap).isExplored();
         }
 
         public FunctionalIterator<ConceptMap> completeIterator(ConceptMap conceptMap) {
             assert fullyExplored(conceptMap);
-            return iterate(set(traversalRequestStates.get(conceptMap).completeSet(),
-                               downstreamRequestStates.get(conceptMap).completeSet()));
-        }
-
-        public void setTraversalExplored(ConceptMap conceptMap) {
-            traversalRequestStates.putIfAbsent(conceptMap, new ExplorationState());
-            traversalRequestStates.get(conceptMap).setExplored();
+            return iterate(exploredRequestStates.get(conceptMap).completeSet());
         }
 
         public void setDownstreamExplored(ConceptMap conceptMap) {
-            downstreamRequestStates.putIfAbsent(conceptMap, new ExplorationState());
-            downstreamRequestStates.get(conceptMap).setExplored();
+            exploredRequestStates.putIfAbsent(conceptMap, new ExplorationState());
+            exploredRequestStates.get(conceptMap).setExplored();
         }
 
         public int iteration() {
@@ -256,8 +232,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         public void nextIteration(int newIteration) {
             assert newIteration > iteration;
             iteration = newIteration;
-            downstreamRequestStates = new HashMap<>();
-            traversalRequestStates = new HashMap<>();
+            exploredRequestStates = new HashMap<>();
         }
 
         private static class ExplorationState {

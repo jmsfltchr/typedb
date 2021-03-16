@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -112,7 +111,7 @@ public abstract class CompoundResolver<
     static class RequestState {
 
         private final int iteration;
-        private final DepthFirstDownstreamManager downstreamManager;
+        private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
 
         public RequestState(int iteration) {
@@ -121,11 +120,11 @@ public abstract class CompoundResolver<
 
         public RequestState(int iteration, Set<ConceptMap> produced) {
             this.iteration = iteration;
-            this.downstreamManager = new DepthFirstDownstreamManager();
+            this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder(produced);
         }
 
-        public DepthFirstDownstreamManager downstreamManager() {
+        public DownstreamManager downstreamManager() {
             return downstreamManager;
         }
 
@@ -135,35 +134,6 @@ public abstract class CompoundResolver<
 
         public ProducedRecorder producedRecorder() {
             return producedRecorder;
-        }
-    }
-
-    public static class DepthFirstDownstreamManager {
-        private final LinkedHashSet<Request> downstreams;
-
-        public DepthFirstDownstreamManager() {
-            this.downstreams = new LinkedHashSet<>();
-        }
-
-        public boolean hasDownstream() {
-            return !downstreams.isEmpty();
-        }
-
-        public Request nextDownstream() {
-            return this.downstreams.iterator().next();
-        }
-
-        public void addDownstream(Request request) {
-            assert !(downstreams.contains(request)) : "downstream answer producer already contains this request";
-            downstreams.add(request);
-        }
-
-        public void removeDownstream(Request request) {
-            downstreams.remove(request);
-        }
-
-        public void clearDownstreams() {
-            downstreams.clear();
         }
     }
 }

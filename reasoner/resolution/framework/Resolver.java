@@ -49,6 +49,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
 import static grakn.core.common.iterator.Iterators.iterate;
@@ -234,7 +235,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         public FunctionalIterator<ConceptMap> completeIterator(ConceptMap conceptMap) {
             assert fullyExplored(conceptMap);
-            return iterate(traversalIterator(conceptMap)).link(iterate(downstreamRequestStates.get(conceptMap).completeSet()));
+            return iterate(set(traversalRequestStates.get(conceptMap).completeSet(),
+                               downstreamRequestStates.get(conceptMap).completeSet()));
         }
 
         public void setTraversalExplored(ConceptMap conceptMap) {

@@ -224,18 +224,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             return downstreamManager;
         }
 
-//        @Override
-//        public boolean hasUpstreamAnswer() {
-//            // TODO Collapse with hasResponse()
-//            return false;
-//        }
-//
-//        @Override
-//        public FunctionalIterator<Partial<?>> upstreamAnswers() {
-//            // TODO Collapse with nextResponse()
-//            return null;
-//        }
-
         public int iteration() {
             return iteration;
         }

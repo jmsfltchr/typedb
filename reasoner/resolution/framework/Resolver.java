@@ -39,11 +39,13 @@ import grakn.core.traversal.common.Identifier.Variable.Retrievable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -196,7 +198,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected static class RequestStatesTracker {
+    public static class RequestStatesTracker {
         HashMap<ConceptMap, ExplorationState> exploredRequestStates;
         private int iteration;
 
@@ -205,24 +207,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.exploredRequestStates = new HashMap<>();
         }
 
-        public void record(ConceptMap requestConceptMap, ConceptMap answerConceptMap) {
-            exploredRequestStates.putIfAbsent(requestConceptMap, new ExplorationState());
-            exploredRequestStates.get(requestConceptMap).add(answerConceptMap);
-        }
-
-        public boolean fullyExplored(ConceptMap conceptMap) {
-            exploredRequestStates.putIfAbsent(conceptMap, new ExplorationState());
-            return exploredRequestStates.get(conceptMap).isExplored();
-        }
-
-        public FunctionalIterator<ConceptMap> completeIterator(ConceptMap conceptMap) {
-            assert fullyExplored(conceptMap);
-            return iterate(exploredRequestStates.get(conceptMap).completeSet());
-        }
-
-        public void setDownstreamExplored(ConceptMap conceptMap) {
-            exploredRequestStates.putIfAbsent(conceptMap, new ExplorationState());
-            exploredRequestStates.get(conceptMap).setExplored();
+        public boolean isTracked(ConceptMap conceptMap) {
+            return exploredRequestStates.containsKey(conceptMap);
         }
 
         public int iteration() {
@@ -235,31 +221,48 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             exploredRequestStates = new HashMap<>();
         }
 
-        private static class ExplorationState {
+        public ExplorationState getExplorationState(ConceptMap conceptMap) {
+            return exploredRequestStates.get(conceptMap);
+        }
 
-            private final Set<ConceptMap> answers;
-            private boolean isExplored;
+        public static class ExplorationState {
 
-            ExplorationState() {
-                this.answers = new HashSet<>();
-                this.isExplored = false;
+            private final List<ConceptMap> answers;
+            private boolean retrievedFromIncomplete;
+            private boolean requiresReiteration;
+            private final FunctionalIterator<ConceptMap> traversal;
+
+            public ExplorationState(FunctionalIterator<ConceptMap> traversal) {
+                this.traversal = traversal;
+                this.answers = new ArrayList<>();
+                this.retrievedFromIncomplete = false;
+                this.requiresReiteration = false;
             }
 
-            public Set<ConceptMap> completeSet() {
-                assert isExplored;
-                return answers;
+            public void recordRuleAnswer(ConceptMap ruleAnswer) {
+                if (retrievedFromIncomplete) requiresReiteration = true;
+                answers.add(ruleAnswer);
             }
 
-            boolean isExplored() {
-                return isExplored;
+            public Optional<ConceptMap> next(int index, boolean isExploringRules) {
+                assert index >= 0;
+                if (index < answers.size()) {
+                    return Optional.of(answers.get(index));
+                } else if (index == answers.size()) {
+                    if (traversal.hasNext()) {
+                        ConceptMap newAnswer = traversal.next();
+                        answers.add(newAnswer);
+                        return Optional.of(newAnswer);
+                    }
+                    if (!isExploringRules) retrievedFromIncomplete = true;
+                    return Optional.empty();
+                } else {
+                    throw GraknException.of(ILLEGAL_STATE);
+                }
             }
 
-            void setExplored() {
-                this.isExplored = true;
-            }
-
-            void add(ConceptMap answer) {
-                answers.add(answer);
+            public boolean requiresReiteration() {
+                return requiresReiteration;
             }
         }
     }
@@ -275,11 +278,13 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.produced = produced;
         }
 
-        public void recordProduced(ConceptMap conceptMap) {
+        public boolean recordProduced(ConceptMap conceptMap) {
+            if (produced.contains(conceptMap)) return true;
             produced.add(conceptMap);
+            return false;
         }
 
-        public boolean hasProduced(ConceptMap conceptMap) {
+        public boolean hasProduced(ConceptMap conceptMap) { // TODO method shouldn't be needed
             return produced.contains(conceptMap);
         }
 

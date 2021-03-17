@@ -107,7 +107,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         Request fromUpstream = fromUpstream(toDownstream);
         RequestState requestState = this.requestStates.get(fromUpstream);
 
-        // TODO: Any conceptMap we see should already have been seen as an incoming request
         assert requestStatesTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
         requestStatesTrackers.get(fromUpstream.partialAnswer().root()).getExplorationState(
                 fromUpstream.partialAnswer().conceptMap()).recordRuleAnswer(fromDownstream.answer().conceptMap());
@@ -223,17 +222,18 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             completableStatesTracker.nextIteration(iteration);
         }
 
-        if (completableStatesTracker.isTracked(fromUpstream.partialAnswer().conceptMap())) {
-            ExplorationState exploration = completableStatesTracker.getExplorationState(fromUpstream.partialAnswer().conceptMap());
+        ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
+        if (completableStatesTracker.isTracked(answerFromUpstream)) {
+            ExplorationState exploration = completableStatesTracker.getExplorationState(answerFromUpstream);
             return new RetrievalRequestState(fromUpstream, exploration, iteration);
         } else {
             assert fromUpstream.partialAnswer().isMapped();
-            FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), fromUpstream.partialAnswer().conceptMap());
-            ExplorationState exploration = new ExplorationState(traversal);
-            boolean singleAnswerRequired = fromUpstream.partialAnswer().conceptMap().concepts().keySet().containsAll(unboundVars());
+            FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
+            ExplorationState exploration = completableStatesTracker.newExplorationState(answerFromUpstream, traversal);
+            boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
             RequestState requestState;
-            if (!recursionState.hasReceived(fromUpstream.partialAnswer().conceptMap())) {
-                recursionState.recordReceived(fromUpstream.partialAnswer().conceptMap());
+            if (!recursionState.hasReceived(answerFromUpstream)) {
+                recursionState.recordReceived(answerFromUpstream);
                 requestState = new RuleExplorationRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
                 registerRules(fromUpstream, requestState.asExploration());
             } else {

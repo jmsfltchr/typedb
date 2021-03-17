@@ -225,6 +225,12 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return exploredRequestStates.get(conceptMap);
         }
 
+        public ExplorationState newExplorationState(ConceptMap conceptMap, FunctionalIterator<ConceptMap> traversal) {
+            ExplorationState exploration = new ExplorationState(traversal);
+            exploredRequestStates.put(conceptMap, exploration);
+            return exploration;
+        }
+
         public static class ExplorationState {
 
             private final List<ConceptMap> answers;

@@ -234,20 +234,21 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         public static class ExplorationState {
 
             private final List<ConceptMap> answers;
+            private final Set<ConceptMap> answersSet;
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
             private final FunctionalIterator<ConceptMap> traversal;
 
             public ExplorationState(FunctionalIterator<ConceptMap> traversal) {
                 this.traversal = traversal;
-                this.answers = new ArrayList<>();
+                this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
+                this.answersSet = new HashSet<>();
                 this.retrievedFromIncomplete = false;
                 this.requiresReiteration = false;
             }
 
             public void recordRuleAnswer(ConceptMap ruleAnswer) {
-                if (retrievedFromIncomplete) requiresReiteration = true;
-                answers.add(ruleAnswer);
+                if (newAnswer(ruleAnswer) && retrievedFromIncomplete) requiresReiteration = true;
             }
 
             public Optional<ConceptMap> next(int index, boolean isExploringRules) {
@@ -257,14 +258,25 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 } else if (index == answers.size()) {
                     if (traversal.hasNext()) {
                         ConceptMap newAnswer = traversal.next();
-                        answers.add(newAnswer);
-                        return Optional.of(newAnswer);
+                        boolean isNewAnswer = newAnswer(newAnswer);
+                        if (isNewAnswer) {
+                            return Optional.of(newAnswer);
+                        } else {
+                            return Optional.empty();
+                        }
                     }
                     if (!isExploringRules) retrievedFromIncomplete = true;
                     return Optional.empty();
                 } else {
                     throw GraknException.of(ILLEGAL_STATE);
                 }
+            }
+
+            private boolean newAnswer(ConceptMap conceptMap) {
+                if (answersSet.contains(conceptMap)) return false;
+                answers.add(conceptMap);
+                answersSet.add(conceptMap);
+                return true;
             }
 
             public boolean requiresReiteration() {

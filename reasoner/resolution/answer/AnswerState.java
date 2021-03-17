@@ -45,7 +45,7 @@ public abstract class AnswerState {
     private final boolean recordExplanations;
     private final Derivation derivation;
     private final Actor.Driver<? extends Resolver<?>> root;
-    final boolean requiresReiteration;
+    boolean requiresReiteration;
 
     AnswerState(ConceptMap conceptMap, Actor.Driver<? extends Resolver<?>> root, boolean requiresReiteration,
                 @Nullable Derivation derivation, boolean recordExplanations) {
@@ -237,6 +237,10 @@ public abstract class AnswerState {
             // add the initial concept map second, to make sure we override and retain all of these
             concepts.putAll(conceptMap().concepts());
             return new ConceptMap(concepts);
+        }
+
+        public void requiresReiteration(boolean requiresReiteration) {
+            this.requiresReiteration = requiresReiteration;
         }
 
         public static class Identity extends Partial<Top> {
@@ -466,7 +470,7 @@ public abstract class AnswerState {
 
             public Optional<Partial<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
                 Optional<ConceptMap> unUnified = unifier.unUnify(concepts, instanceRequirements);
-                return unUnified.map(ans -> parent().with(ans, true, resolvedBy(), this));
+                return unUnified.map(ans -> parent().with(ans, requiresReiteration, resolvedBy(), this));
             }
 
             @Override

@@ -247,8 +247,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.requiresReiteration = false;
             }
 
-            public void recordRuleAnswer(ConceptMap ruleAnswer) {
-                if (newAnswer(ruleAnswer) && retrievedFromIncomplete) requiresReiteration = true;
+            public void recordRuleAnswer(ConceptMap ruleAnswer, boolean requiresReiteration) {
+                if ((newAnswer(ruleAnswer) && retrievedFromIncomplete) || requiresReiteration) this.requiresReiteration = true;
             }
 
             public Optional<ConceptMap> next(int index, boolean isExploringRules) {

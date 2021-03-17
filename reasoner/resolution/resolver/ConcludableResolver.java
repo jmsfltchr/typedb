@@ -109,7 +109,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         assert requestStatesTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
         requestStatesTrackers.get(fromUpstream.partialAnswer().root()).getExplorationState(
-                fromUpstream.partialAnswer().conceptMap()).recordRuleAnswer(fromDownstream.answer().conceptMap());
+                fromUpstream.partialAnswer().conceptMap()).recordRuleAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
 
         if (iteration == requestState.iteration()) {
             nextAnswer(fromUpstream, requestState, iteration);
@@ -294,13 +294,25 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             boolean exhausted = false;
             Optional<Partial<?>> answer = Optional.empty();
             while (!exhausted && !answer.isPresent()) {
-                answer = next().map(conceptMap -> fromUpstream.partialAnswer().asMapped().aggregateToUpstream(conceptMap));
+                answer = next().map(conceptMap -> {
+                    Partial.Mapped mapped = fromUpstream.partialAnswer().asMapped();
+                    if (explorationState.requiresReiteration())
+                        mapped.requiresReiteration(true);
+                    return mapped.aggregateToUpstream(conceptMap);
+                });
                 if (answer.isPresent()) {
                     pointer++;
                 } else {
                     exhausted = true;
                 }
                 answer = answer.filter(partial -> !producedRecorder.recordProduced(partial.conceptMap()));
+//                        .map(a ->
+//                             {
+//                                 if (explorationState.requiresReiteration())
+//                                     a.requiresReiteration(true);
+//                                 return a;
+//                             }
+//                        );
             }
             return answer;
         }

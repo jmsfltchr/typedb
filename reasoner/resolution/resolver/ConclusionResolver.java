@@ -95,6 +95,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
         RequestState requestState = this.requestStates.get(fromUpstream);
+        fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
         FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                 .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);

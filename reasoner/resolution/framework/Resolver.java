@@ -32,6 +32,7 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
+import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -198,6 +199,47 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
+    protected abstract static class CachingRequestState {
+
+        private final int iteration;
+        protected final Request fromUpstream;
+        protected final RequestStatesTracker.ExplorationState explorationState;
+        protected int pointer;
+
+        public CachingRequestState(Request fromUpstream, RequestStatesTracker.ExplorationState explorationState, int iteration) {
+            this.fromUpstream = fromUpstream;
+            this.explorationState = explorationState;
+            this.iteration = iteration;
+            this.pointer = 0;
+        }
+
+        public Optional<Partial<?>> nextAnswer() {
+            boolean exhausted = false;
+            Optional<Partial<?>> answer = Optional.empty();
+            while (!exhausted && !answer.isPresent()) {
+                answer = next().map(this::toUpstream);
+                if (answer.isPresent()) {
+                    pointer++;
+                } else {
+                    exhausted = true;
+                }
+                answer = answer.filter(partial -> !isDuplicate(partial.conceptMap()));
+            }
+            return answer;
+        }
+
+        protected abstract Partial<?> toUpstream(ConceptMap conceptMap);
+
+        protected abstract boolean isDuplicate(ConceptMap conceptMap);
+
+        public int iteration() {
+            return iteration;
+        }
+
+        protected abstract Optional<ConceptMap> next();
+
+    }
+
     public static class RequestStatesTracker {
         HashMap<ConceptMap, ExplorationState> exploredRequestStates;
         private int iteration;
@@ -296,7 +338,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.produced = produced;
         }
 
-        public boolean recordProduced(ConceptMap conceptMap) {
+        public boolean produced(ConceptMap conceptMap) {
             if (produced.contains(conceptMap)) return true;
             produced.add(conceptMap);
             return false;

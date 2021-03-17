@@ -192,7 +192,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     private RequestState getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!requestStates.containsKey(fromUpstream)) {
-            RequestState newRequestState = requestStateCreate(fromUpstream, iteration);
+            RequestState newRequestState = createRequestState(fromUpstream, iteration);
             requestStates.put(fromUpstream, newRequestState);
         } else {
             RequestState requestState = this.requestStates.get(fromUpstream);
@@ -200,14 +200,14 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
             if (requestState.iteration() + 1 == iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                RequestState newRequestState = requestStateCreate(fromUpstream, iteration);
+                RequestState newRequestState = createRequestState(fromUpstream, iteration);
                 this.requestStates.put(fromUpstream, newRequestState);
             }
         }
         return requestStates.get(fromUpstream);
     }
 
-    protected RequestState requestStateCreate(Request fromUpstream, int iteration) {
+    protected RequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating new Responses for iteration{}, request: {}", name(), iteration, fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         recursionStates.putIfAbsent(root, new RecursionState(iteration));
@@ -217,20 +217,20 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker(iteration));
-        RequestStatesTracker completableStatesTracker = requestStatesTrackers.get(root);
-        if (completableStatesTracker.iteration() < iteration) {
-            completableStatesTracker.nextIteration(iteration);
+        RequestStatesTracker tracker = requestStatesTrackers.get(root);
+        if (tracker.iteration() < iteration) {
+            tracker.nextIteration(iteration);
         }
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
-        if (completableStatesTracker.isTracked(answerFromUpstream)) {
-            ExplorationState exploration = completableStatesTracker.getExplorationState(answerFromUpstream);
+        if (tracker.isTracked(answerFromUpstream)) {
+            ExplorationState exploration = tracker.getExplorationState(answerFromUpstream);
             return new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
         } else {
             assert fromUpstream.partialAnswer().isMapped();
             FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
-            ExplorationState exploration = completableStatesTracker.newExplorationState(answerFromUpstream, traversal);
+            ExplorationState exploration = tracker.newExplorationState(answerFromUpstream, traversal);
             RequestState requestState;
             if (!recursionState.hasReceived(answerFromUpstream)) {
                 recursionState.recordReceived(answerFromUpstream);
@@ -272,59 +272,27 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    protected abstract static class RequestState {
+    protected abstract static class RequestState extends Resolver.CachingRequestState {
 
-        private final int iteration;
-        private final Request fromUpstream;
-        protected final ExplorationState explorationState;
         private final ProducedRecorder producedRecorder;
         private final boolean singleAnswerRequired;
-        protected int pointer;
 
         public RequestState(Request fromUpstream, ExplorationState explorationState, int iteration, boolean singleAnswerRequired) {
-            this.producedRecorder = new ProducedRecorder();
-            this.fromUpstream = fromUpstream;
-            this.explorationState = explorationState;
-            this.iteration = iteration;
+            super(fromUpstream, explorationState, iteration);
             this.singleAnswerRequired = singleAnswerRequired;
-            this.pointer = 0;
+            this.producedRecorder = new ProducedRecorder();
         }
 
-        public Optional<Partial<?>> nextAnswer() {
-            boolean exhausted = false;
-            Optional<Partial<?>> answer = Optional.empty();
-            while (!exhausted && !answer.isPresent()) {
-                answer = next().map(conceptMap -> {
-                    Partial.Mapped mapped = fromUpstream.partialAnswer().asMapped();
-                    if (explorationState.requiresReiteration())
-                        mapped.requiresReiteration(true);
-                    return mapped.aggregateToUpstream(conceptMap);
-                });
-                if (answer.isPresent()) {
-                    pointer++;
-                } else {
-                    exhausted = true;
-                }
-                answer = answer.filter(partial -> !producedRecorder.recordProduced(partial.conceptMap()));
-//                        .map(a ->
-//                             {
-//                                 if (explorationState.requiresReiteration())
-//                                     a.requiresReiteration(true);
-//                                 return a;
-//                             }
-//                        );
-            }
-            return answer;
+        @Override
+        protected boolean isDuplicate(ConceptMap conceptMap) {
+            return producedRecorder.produced(conceptMap);
         }
 
-        public int iteration() {
-            return iteration;
-        }
-
-        protected abstract Optional<ConceptMap> next();
-
-        public boolean singleAnswerRequired() {
-            return singleAnswerRequired;
+        protected Partial<?> toUpstream(ConceptMap conceptMap) {
+            Partial.Mapped mapped = fromUpstream.partialAnswer().asMapped();
+            if (explorationState.requiresReiteration())
+                mapped.requiresReiteration(true);
+            return mapped.aggregateToUpstream(conceptMap);
         }
 
         public boolean isExploration() {
@@ -341,6 +309,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public RetrievalRequestState asRetrieval() {
             throw GraknException.of(ILLEGAL_CAST, className(this.getClass()), className(RetrievalRequestState.class));
+        }
+
+        public boolean singleAnswerRequired() {
+            return singleAnswerRequired;
         }
     }
 

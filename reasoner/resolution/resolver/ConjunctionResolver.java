@@ -110,7 +110,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
     private boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
         RequestState requestState = requestStates.get(fromUpstream);
         if (!requestState.producedRecorder().hasProduced(upstreamAnswer.conceptMap())) {
-            requestState.producedRecorder().recordProduced(upstreamAnswer.conceptMap());
+            requestState.producedRecorder().produced(upstreamAnswer.conceptMap());
             answerToUpstream(upstreamAnswer, fromUpstream, iteration);
             return true;
         } else {

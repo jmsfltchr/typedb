@@ -94,7 +94,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             failToUpstream(fromUpstream, iteration);
         } else {
             assert iteration == requestState.iteration();
-            nextAnswer(fromUpstream, requestState.asExploration(), iteration);
+            nextAnswer(fromUpstream, requestState, iteration);
         }
     }
 
@@ -127,9 +127,9 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     we respond for all N ahead of time. Then, when the rules actually return an answer to this concludable, we do nothing.
      */
     private void answerFound(Partial<?> upstreamAnswer, Request fromUpstream, int iteration) {
-        RuleExplorationRequestState requestState = this.requestStates.get(fromUpstream).asExploration();
-        if (requestState.singleAnswerRequired()) {
-            requestState.downstreamManager().clearDownstreams();
+        RequestState requestState = this.requestStates.get(fromUpstream);
+        if (requestState.isExploration() && requestState.singleAnswerRequired()) {
+            requestState.asExploration().downstreamManager().clearDownstreams();
         }
         answerToUpstream(upstreamAnswer, fromUpstream, iteration);
     }
@@ -149,7 +149,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             return;
         }
         if (requestState.isExploration()) requestState.asExploration().downstreamManager().removeDownstream(fromDownstream.sourceRequest());
-        nextAnswer(fromUpstream, requestState.asExploration(), iteration);
+        nextAnswer(fromUpstream, requestState, iteration);
     }
 
     @Override
@@ -223,21 +223,21 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
+        boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
         if (completableStatesTracker.isTracked(answerFromUpstream)) {
             ExplorationState exploration = completableStatesTracker.getExplorationState(answerFromUpstream);
-            return new RetrievalRequestState(fromUpstream, exploration, iteration);
+            return new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
         } else {
             assert fromUpstream.partialAnswer().isMapped();
             FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
             ExplorationState exploration = completableStatesTracker.newExplorationState(answerFromUpstream, traversal);
-            boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
             RequestState requestState;
             if (!recursionState.hasReceived(answerFromUpstream)) {
                 recursionState.recordReceived(answerFromUpstream);
                 requestState = new RuleExplorationRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
                 registerRules(fromUpstream, requestState.asExploration());
             } else {
-                requestState = new RetrievalRequestState(fromUpstream, exploration, iteration);
+                requestState = new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
             }
             return requestState;
         }
@@ -278,20 +278,30 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         private final Request fromUpstream;
         protected final ExplorationState explorationState;
         private final ProducedRecorder producedRecorder;
+        private final boolean singleAnswerRequired;
         protected int pointer;
 
-        public RequestState(Request fromUpstream, ExplorationState explorationState, int iteration) {
+        public RequestState(Request fromUpstream, ExplorationState explorationState, int iteration, boolean singleAnswerRequired) {
             this.producedRecorder = new ProducedRecorder();
             this.fromUpstream = fromUpstream;
             this.explorationState = explorationState;
             this.iteration = iteration;
+            this.singleAnswerRequired = singleAnswerRequired;
             this.pointer = 0;
         }
 
         public Optional<Partial<?>> nextAnswer() {
-            Optional<Partial<?>> answer = next().map(conceptMap -> fromUpstream.partialAnswer().asMapped().aggregateToUpstream(conceptMap));
-            answer = answer.filter(partial -> !producedRecorder.recordProduced(partial.conceptMap()));
-            if (answer.isPresent()) pointer ++;
+            boolean exhausted = false;
+            Optional<Partial<?>> answer = Optional.empty();
+            while (!exhausted && !answer.isPresent()) {
+                answer = next().map(conceptMap -> fromUpstream.partialAnswer().asMapped().aggregateToUpstream(conceptMap));
+                if (answer.isPresent()) {
+                    pointer++;
+                } else {
+                    exhausted = true;
+                }
+                answer = answer.filter(partial -> !producedRecorder.recordProduced(partial.conceptMap()));
+            }
             return answer;
         }
 
@@ -300,6 +310,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         protected abstract Optional<ConceptMap> next();
+
+        public boolean singleAnswerRequired() {
+            return singleAnswerRequired;
+        }
 
         public boolean isExploration() {
             return false;
@@ -321,11 +335,9 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private static class RuleExplorationRequestState extends RequestState {
 
         private final DownstreamManager downstreamManager;
-        private final boolean singleAnswerRequired;
 
         public RuleExplorationRequestState(Request fromUpstream, ExplorationState explorationState, int iteration, boolean singleAnswerRequired) {
-            super(fromUpstream, explorationState, iteration);
-            this.singleAnswerRequired = singleAnswerRequired;
+            super(fromUpstream, explorationState, iteration, singleAnswerRequired);
             this.downstreamManager = new DownstreamManager();
         }
 
@@ -347,16 +359,12 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         public DownstreamManager downstreamManager() {
             return downstreamManager;
         }
-
-        public boolean singleAnswerRequired() {
-            return singleAnswerRequired;
-        }
     }
 
     private static class RetrievalRequestState extends RequestState {
 
-        public RetrievalRequestState(Request fromUpstream, ExplorationState explorationState, int iteration) {
-            super(fromUpstream, explorationState, iteration);
+        public RetrievalRequestState(Request fromUpstream, ExplorationState explorationState, int iteration, boolean singleAnswerRequired) {
+            super(fromUpstream, explorationState, iteration, singleAnswerRequired);
         }
 
         @Override

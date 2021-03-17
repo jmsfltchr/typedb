@@ -19,6 +19,7 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
+import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.Concept;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
@@ -29,6 +30,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
+import grakn.core.reasoner.resolution.framework.Resolver.RequestStatesTracker.ExplorationState;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -37,7 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +57,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private final Map<Request, RequestState> requestStates;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, RequestStatesTracker> completableStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, RequestStatesTracker<Map<Identifier.Variable, Concept>>> requestStatesTrackers;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               Driver<ResolutionRecorder> resolutionRecorder, TraversalEngine traversalEngine,
@@ -67,7 +68,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         this.resolutionRecorder = resolutionRecorder;
         this.requestStates = new HashMap<>();
         this.isInitialised = false;
-        this.completableStatesTrackers = new HashMap<>();
+        this.requestStatesTrackers = new HashMap<>();
     }
 
     @Override
@@ -97,15 +98,23 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         RequestState requestState = this.requestStates.get(fromUpstream);
         fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
+        assert requestStatesTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
+
         FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                 .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
         if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
 
-        FunctionalIterator<Partial<?>> materialisedAnswers = materialisations
-                .map(concepts -> fromUpstream.partialAnswer().asUnified().aggregateToUpstream(concepts))
-                .filter(Optional::isPresent)
-                .map(Optional::get);
-        requestState.addResponses(materialisedAnswers);
+//        FunctionalIterator<Partial<?>> materialisedAnswers = materialisations
+//                .map(concepts -> fromUpstream.partialAnswer().asUnified().aggregateToUpstream(concepts))
+//                .filter(Optional::isPresent)
+//                .map(Optional::get);
+//        requestState.addResponses(materialisedAnswers);
+
+//        requestStatesTrackers.get(fromUpstream.partialAnswer().root())
+//                .getExplorationState(fromUpstream.partialAnswer().conceptMap())
+//                .recordNewAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
+        requestState.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+
         nextAnswer(fromUpstream, requestState, iteration);
     }
 
@@ -146,9 +155,9 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        Optional<Partial<?>> answer = requestState.nextResponse();
-        if (answer.isPresent()) {
-            answerToUpstream(answer.get(), fromUpstream, iteration);
+        Optional<Partial<?>> upstreamAnswer = requestState.nextAnswer();
+        if (upstreamAnswer.isPresent()) {
+            answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else if (requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
@@ -174,9 +183,18 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
     private RequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
+        Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
+        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration));
+        RequestStatesTracker<Map<Identifier.Variable, Concept>> tracker = requestStatesTrackers.get(root);
 
-        RequestState requestState = new RequestState(iteration);
-
+        ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
+        ExplorationState<Map<Identifier.Variable, Concept>> exploration;
+        if (tracker.isTracked(answerFromUpstream)) {
+            exploration = tracker.getExplorationState(answerFromUpstream);
+        } else {
+            exploration = tracker.newExplorationState(answerFromUpstream, Iterators.empty());
+        }
+        RequestState requestState = new RequestState(fromUpstream, exploration, iteration);
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
@@ -207,42 +225,58 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         return name() + ": then " + conclusion.rule().then();
     }
 
-    private static class RequestState {
+    private static class RequestState extends CachingRequestState<Map<Identifier.Variable, Concept>> {
 
-        private final List<FunctionalIterator<Partial<?>>> materialisedAnswers;
-        private final int iteration;
-        private final Set<Partial<?>> produced;
         private final DownstreamManager downstreamManager;
+        private final ProducedRecorder producedRecorder;
+        private final List<FunctionalIterator<Map<Identifier.Variable, Concept>>> materialisedAnswers;
+        private boolean requiresReiteration;
 
-        public RequestState(int iteration) {
-            this.materialisedAnswers = new LinkedList<>();
-            this.iteration = iteration;
-            this.produced = new HashSet<>();
+
+        public RequestState(Request fromUpstream, ExplorationState<Map<Identifier.Variable, Concept>> explorationState, int iteration) {
+            super(fromUpstream, explorationState, iteration);
             this.downstreamManager = new DownstreamManager();
+            this.producedRecorder = new ProducedRecorder();
+            this.materialisedAnswers = new LinkedList<>();
         }
 
         public DownstreamManager downstreamManager() {
             return downstreamManager;
         }
 
-        public int iteration() {
-            return iteration;
+        @Override
+        protected Optional<Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
+            return fromUpstream.partialAnswer().asUnified().aggregateToUpstream(answer);
         }
 
-        public void addResponses(FunctionalIterator<Partial<?>> materialisations) {
+        @Override
+        protected boolean isDuplicate(ConceptMap conceptMap) {
+            return producedRecorder.produced(conceptMap);
+        }
+
+        public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {
             materialisedAnswers.add(materialisations);
+            this.requiresReiteration = requiresReiteration;
         }
 
-        public Optional<Partial<?>> nextResponse() {
-            if (hasResponse()) {
-                Partial<?> nextResponse = materialisedAnswers.get(0).next();
-                produced.add(nextResponse);
+        @Override
+        protected Optional<Map<Identifier.Variable, Concept>> next() {
+            Optional<Map<Identifier.Variable, Concept>> next = explorationState.next(pointer, true);
+            if (next.isPresent()) return next;
+            next = nextMaterialisation();
+            next.ifPresent(m -> explorationState.recordNewAnswer(m, requiresReiteration));
+            return next;
+        }
+
+        private Optional<Map<Identifier.Variable, Concept>> nextMaterialisation() {
+            if (hasMaterialisation()) {
+                Map<Identifier.Variable, Concept> nextResponse = materialisedAnswers.get(0).next();
                 return Optional.of(nextResponse);
             }
             else return Optional.empty();
         }
 
-        private boolean hasResponse() {
+        private boolean hasMaterialisation() {
             while (!materialisedAnswers.isEmpty() && !materialisedAnswers.get(0).hasNext()) {
                 materialisedAnswers.remove(0);
             }

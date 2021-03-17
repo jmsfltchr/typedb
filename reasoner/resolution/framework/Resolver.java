@@ -33,6 +33,7 @@ import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.Resolver.RequestStatesTracker.ExplorationState;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -199,14 +200,14 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected abstract static class CachingRequestState {
+    protected abstract static class CachingRequestState<ANSWER> {
 
         private final int iteration;
         protected final Request fromUpstream;
-        protected final RequestStatesTracker.ExplorationState explorationState;
+        protected final ExplorationState<ANSWER> explorationState;
         protected int pointer;
 
-        public CachingRequestState(Request fromUpstream, RequestStatesTracker.ExplorationState explorationState, int iteration) {
+        public CachingRequestState(Request fromUpstream, ExplorationState<ANSWER> explorationState, int iteration) {
             this.fromUpstream = fromUpstream;
             this.explorationState = explorationState;
             this.iteration = iteration;
@@ -215,20 +216,22 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         public Optional<Partial<?>> nextAnswer() {
             boolean exhausted = false;
-            Optional<Partial<?>> answer = Optional.empty();
-            while (!exhausted && !answer.isPresent()) {
-                answer = next().map(this::toUpstream);
+            Optional<Partial<?>> upstreamAnswer = Optional.empty();
+            while (!exhausted) {
+                Optional<ANSWER> answer = next();
                 if (answer.isPresent()) {
                     pointer++;
+                    upstreamAnswer = toUpstream(answer.get());
                 } else {
                     exhausted = true;
                 }
-                answer = answer.filter(partial -> !isDuplicate(partial.conceptMap()));
+                upstreamAnswer = upstreamAnswer.filter(partial -> !isDuplicate(partial.conceptMap()));
+                if (upstreamAnswer.isPresent()) break;
             }
-            return answer;
+            return upstreamAnswer;
         }
 
-        protected abstract Partial<?> toUpstream(ConceptMap conceptMap);
+        protected abstract Optional<Partial<?>> toUpstream(ANSWER conceptMap);
 
         protected abstract boolean isDuplicate(ConceptMap conceptMap);
 
@@ -236,12 +239,12 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return iteration;
         }
 
-        protected abstract Optional<ConceptMap> next();
+        protected abstract Optional<ANSWER> next();
 
     }
 
-    public static class RequestStatesTracker {
-        HashMap<ConceptMap, ExplorationState> exploredRequestStates;
+    public static class RequestStatesTracker<ANSWER> {
+        HashMap<ConceptMap, ExplorationState<ANSWER>> exploredRequestStates;
         private int iteration;
 
         public RequestStatesTracker(int iteration) {
@@ -263,25 +266,25 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             exploredRequestStates = new HashMap<>();
         }
 
-        public ExplorationState getExplorationState(ConceptMap conceptMap) {
-            return exploredRequestStates.get(conceptMap);
+        public ExplorationState<ANSWER> getExplorationState(ConceptMap fromUpstream) {
+            return exploredRequestStates.get(fromUpstream);
         }
 
-        public ExplorationState newExplorationState(ConceptMap conceptMap, FunctionalIterator<ConceptMap> traversal) {
-            ExplorationState exploration = new ExplorationState(traversal);
-            exploredRequestStates.put(conceptMap, exploration);
+        public ExplorationState<ANSWER> newExplorationState(ConceptMap fromUpstream, FunctionalIterator<ANSWER> traversal) {
+            ExplorationState<ANSWER> exploration = new ExplorationState<>(traversal);
+            exploredRequestStates.put(fromUpstream, exploration);
             return exploration;
         }
 
-        public static class ExplorationState {
+        public static class ExplorationState<ANSWER> {
 
-            private final List<ConceptMap> answers;
-            private final Set<ConceptMap> answersSet;
+            private final List<ANSWER> answers;
+            private final Set<ANSWER> answersSet;
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
-            private final FunctionalIterator<ConceptMap> traversal;
+            private final FunctionalIterator<ANSWER> traversal;
 
-            public ExplorationState(FunctionalIterator<ConceptMap> traversal) {
+            public ExplorationState(FunctionalIterator<ANSWER> traversal) {
                 this.traversal = traversal;
                 this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
                 this.answersSet = new HashSet<>();
@@ -289,17 +292,17 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.requiresReiteration = false;
             }
 
-            public void recordRuleAnswer(ConceptMap ruleAnswer, boolean requiresReiteration) {
+            public void recordNewAnswer(ANSWER ruleAnswer, boolean requiresReiteration) {
                 if ((newAnswer(ruleAnswer) && retrievedFromIncomplete) || requiresReiteration) this.requiresReiteration = true;
             }
 
-            public Optional<ConceptMap> next(int index, boolean isExploringRules) {
+            public Optional<ANSWER> next(int index, boolean isExploringRules) {
                 assert index >= 0;
                 if (index < answers.size()) {
                     return Optional.of(answers.get(index));
                 } else if (index == answers.size()) {
                     if (traversal.hasNext()) {
-                        ConceptMap newAnswer = traversal.next();
+                        ANSWER newAnswer = traversal.next();
                         boolean isNewAnswer = newAnswer(newAnswer);
                         if (isNewAnswer) {
                             return Optional.of(newAnswer);
@@ -314,10 +317,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 }
             }
 
-            private boolean newAnswer(ConceptMap conceptMap) {
-                if (answersSet.contains(conceptMap)) return false;
-                answers.add(conceptMap);
-                answersSet.add(conceptMap);
+            private boolean newAnswer(ANSWER answer) {
+                if (answersSet.contains(answer)) return false;
+                answers.add(answer);
+                answersSet.add(answer);
                 return true;
             }
 

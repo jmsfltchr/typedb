@@ -18,6 +18,7 @@
 package grakn.core.reasoner.resolution;
 
 import grakn.core.common.parameters.Arguments;
+import grakn.core.common.parameters.Context;
 import grakn.core.common.parameters.Options;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.rocks.RocksGrakn;
@@ -46,14 +47,8 @@ public class GrablTest {
     private static RocksTransaction rocksTransaction;
 
     @Before
-    public void setUp() throws IOException {
-//        Util.resetDirectory(dataDir);
+    public void setUp() {
         grakn = RocksGrakn.open(options);
-    }
-
-    private void initialise(Arguments.Session.Type sessionType, Arguments.Transaction.Type transactionType) {
-        session = grakn.session(database, sessionType);
-        rocksTransaction = session.transaction(transactionType);
     }
 
     @After
@@ -65,7 +60,8 @@ public class GrablTest {
 
     @Test
     public void grabl_reasoning_query() {
-        initialise(Arguments.Session.Type.DATA, Arguments.Transaction.Type.READ);
+        session = grakn.session(database, Arguments.Session.Type.DATA);
+        rocksTransaction = session.transaction(Arguments.Transaction.Type.READ, new Options.Transaction().parallel(false).traceInference(true));
         long startTime = System.currentTimeMillis();
         List<ConceptMap> answers = rocksTransaction.query()
                 .match(Graql.parseQuery("match\n" +
@@ -78,5 +74,25 @@ public class GrablTest {
         long endTime = System.currentTimeMillis();
         System.out.println("Test took " + (endTime - startTime) + " milliseconds");
         assertEquals(162, answers.size());
+    }
+
+    @Test
+    public void grabl_reasoning_query_simplified() {
+        session = grakn.session(database, Arguments.Session.Type.DATA);
+        rocksTransaction = session.transaction(Arguments.Transaction.Type.READ, new Options.Transaction().parallel(false).traceInference(true));
+        long startTime = System.currentTimeMillis();
+        List<ConceptMap> answers = rocksTransaction.query()
+                .match(Graql.parseQuery("match\n" +
+                                                "$owner isa organisation, has name \"graknlabs\" ;\n" +
+                                                "(owner: $owner, repo: $repo) isa repo-owner ;\n" +
+                                                "$repo isa repository, has name $name ;\n" +
+                                                "$user isa user, has name \"lriuui0x0\" ;\n" +
+                                                "(collaborator: $user, repo: $repo) isa repo-collaborator;\n" +
+                                                "get $name, $repo;").asMatch(),
+                       new Context.Query(rocksTransaction.context(), new Options.Query().parallel(false))).toList();
+        long endTime = System.currentTimeMillis();
+        System.out.println("Test took " + (endTime - startTime) + " milliseconds");
+        assertEquals(81, answers.size());
+        // Message count: 24800 Test took 5523 milliseconds
     }
 }

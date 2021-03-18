@@ -55,7 +55,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
-import static grakn.core.common.iterator.Iterators.iterate;
 import static grakn.core.common.parameters.Arguments.Query.Producer.INCREMENTAL;
 
 public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Actor<RESOLVER> {
@@ -287,7 +286,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private boolean requiresReiteration;
             private FunctionalIterator<ANSWER> traversal;
 
-            public ExplorationState() {
+            private ExplorationState() {
                 this.traversal = Iterators.empty();
                 this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
                 this.answersSet = new HashSet<>();

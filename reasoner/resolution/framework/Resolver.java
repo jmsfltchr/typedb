@@ -282,7 +282,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private final Set<ANSWER> answersSet;
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
-            private final FunctionalIterator<ANSWER> traversal;
+            private FunctionalIterator<ANSWER> traversal;
 
             public ExplorationState(FunctionalIterator<ANSWER> traversal) {
                 this.traversal = traversal;
@@ -292,11 +292,19 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.requiresReiteration = false;
             }
 
-            public void recordNewAnswer(ANSWER ruleAnswer, boolean requiresReiteration) {
-                if ((newAnswer(ruleAnswer) && retrievedFromIncomplete) || requiresReiteration) this.requiresReiteration = true;
+            public void recordNewAnswer(ANSWER newAnswer) {
+                newAnswer(newAnswer);
             }
 
-            public Optional<ANSWER> next(int index, boolean isExploringRules) {
+            public void recordNewAnswers(Iterator<ANSWER> newAnswers) {
+                traversal = traversal.link(newAnswers);
+            }
+
+            public void setRequiresReiteration() {
+                this.requiresReiteration = true;
+            }
+
+            public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {
                 assert index >= 0;
                 if (index < answers.size()) {
                     return Optional.of(answers.get(index));
@@ -310,7 +318,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                             return Optional.empty();
                         }
                     }
-                    if (!isExploringRules) retrievedFromIncomplete = true;
+                    if (!canRecordNewAnswers) retrievedFromIncomplete = true;
                     return Optional.empty();
                 } else {
                     throw GraknException.of(ILLEGAL_STATE);
@@ -321,6 +329,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 if (answersSet.contains(answer)) return false;
                 answers.add(answer);
                 answersSet.add(answer);
+                if (retrievedFromIncomplete) this.requiresReiteration = true;
                 return true;
             }
 

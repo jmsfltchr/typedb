@@ -104,17 +104,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                 .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
         if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
 
-//        FunctionalIterator<Partial<?>> materialisedAnswers = materialisations
-//                .map(concepts -> fromUpstream.partialAnswer().asUnified().aggregateToUpstream(concepts))
-//                .filter(Optional::isPresent)
-//                .map(Optional::get);
-//        requestState.addResponses(materialisedAnswers);
-
-//        requestStatesTrackers.get(fromUpstream.partialAnswer().root())
-//                .getExplorationState(fromUpstream.partialAnswer().conceptMap())
-//                .recordNewAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
         requestState.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
-
         nextAnswer(fromUpstream, requestState, iteration);
     }
 
@@ -229,15 +219,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
-        private final List<FunctionalIterator<Map<Identifier.Variable, Concept>>> materialisedAnswers;
-        private boolean requiresReiteration;
 
 
         public RequestState(Request fromUpstream, ExplorationState<Map<Identifier.Variable, Concept>> explorationState, int iteration) {
             super(fromUpstream, explorationState, iteration);
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder();
-            this.materialisedAnswers = new LinkedList<>();
         }
 
         public DownstreamManager downstreamManager() {
@@ -255,32 +242,13 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
 
         public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {
-            materialisedAnswers.add(materialisations);
-            this.requiresReiteration = requiresReiteration;
+            explorationState.recordNewAnswers(materialisations);
+            if (requiresReiteration) explorationState.setRequiresReiteration();
         }
 
         @Override
         protected Optional<Map<Identifier.Variable, Concept>> next() {
-            Optional<Map<Identifier.Variable, Concept>> next = explorationState.next(pointer, true);
-            if (next.isPresent()) return next;
-            next = nextMaterialisation();
-            next.ifPresent(m -> explorationState.recordNewAnswer(m, requiresReiteration));
-            return next;
-        }
-
-        private Optional<Map<Identifier.Variable, Concept>> nextMaterialisation() {
-            if (hasMaterialisation()) {
-                Map<Identifier.Variable, Concept> nextResponse = materialisedAnswers.get(0).next();
-                return Optional.of(nextResponse);
-            }
-            else return Optional.empty();
-        }
-
-        private boolean hasMaterialisation() {
-            while (!materialisedAnswers.isEmpty() && !materialisedAnswers.get(0).hasNext()) {
-                materialisedAnswers.remove(0);
-            }
-            return !materialisedAnswers.isEmpty();
+            return explorationState.next(pointer, true);
         }
     }
 }

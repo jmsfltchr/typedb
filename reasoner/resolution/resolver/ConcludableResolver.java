@@ -346,7 +346,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         public void newAnswer(ConceptMap conceptMap, boolean requiresReiteration) {
-            explorationState.recordNewAnswer(conceptMap, requiresReiteration);
+            explorationState.recordNewAnswer(conceptMap);
+            if (requiresReiteration) explorationState.setRequiresReiteration();
         }
     }
 

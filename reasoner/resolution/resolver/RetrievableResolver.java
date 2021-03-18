@@ -27,7 +27,6 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.RequestStatesTracker.ExplorationState;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.TraversalEngine;
@@ -110,9 +109,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration));
-        ExplorationState<ConceptMap> exploration = requestStatesTrackers.get(root)
-                .newExplorationState(answerFromUpstream, traversal);
-        return new RequestState(fromUpstream, exploration, iteration);
+        return new RequestState(fromUpstream, traversal, iteration);
     }
 
     private void nextAnswer(Request fromUpstream, RequestState responseProducer, int iteration) {
@@ -124,28 +121,29 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class RequestState extends CachingRequestState<ConceptMap> {
+    private static class RequestState {
 
-        public RequestState(Request fromUpstream, ExplorationState<ConceptMap> explorationState, int iteration) {
-            super(fromUpstream, explorationState, iteration);
+        private final Request fromUpstream;
+        private final FunctionalIterator<ConceptMap> upstreamAnswers;
+        private final int iteration;
+
+        public RequestState(Request fromUpstream, FunctionalIterator<ConceptMap> upstreamAnswers, int iteration) {
+            this.fromUpstream = fromUpstream;
+            this.upstreamAnswers = upstreamAnswers;
+            this.iteration = iteration;
         }
 
-        @Override
-        protected Optional<Partial<?>> toUpstream(ConceptMap conceptMap) {
-            Partial.Filtered filtered = fromUpstream.partialAnswer().asFiltered();
-            if (explorationState.requiresReiteration())
-                filtered.requiresReiteration(true);
-            return Optional.of(filtered.aggregateToUpstream(conceptMap));
+        protected Partial<?> toUpstream(ConceptMap conceptMap) {
+            return fromUpstream.partialAnswer().asFiltered().aggregateToUpstream(conceptMap);
         }
 
-        @Override
-        protected boolean isDuplicate(ConceptMap conceptMap) {
-            return false;
+        public Optional<Partial<?>> nextAnswer() {
+            if (!upstreamAnswers.hasNext()) return Optional.empty();
+            return Optional.of(toUpstream(upstreamAnswers.next()));
         }
 
-        @Override
-        protected Optional<ConceptMap> next() {
-            return explorationState.next(pointer, false);
+        public int iteration() {
+            return iteration;
         }
     }
 }

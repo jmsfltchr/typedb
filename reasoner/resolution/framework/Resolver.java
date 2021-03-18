@@ -275,13 +275,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         public ExplorationState<ANSWER> getExplorationState(ConceptMap fromUpstream) {
+            exploredRequestStates.putIfAbsent(fromUpstream, new ExplorationState<>());
             return exploredRequestStates.get(fromUpstream);
-        }
-
-        public ExplorationState<ANSWER> newExplorationState(ConceptMap fromUpstream, FunctionalIterator<ANSWER> traversal) {
-            ExplorationState<ANSWER> exploration = new ExplorationState<>(traversal);
-            exploredRequestStates.put(fromUpstream, exploration);
-            return exploration;
         }
 
         public static class ExplorationState<ANSWER> {
@@ -292,8 +287,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private boolean requiresReiteration;
             private FunctionalIterator<ANSWER> traversal;
 
-            public ExplorationState(FunctionalIterator<ANSWER> traversal) {
-                this.traversal = traversal;
+            public ExplorationState() {
+                this.traversal = Iterators.empty();
                 this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
                 this.answersSet = new HashSet<>();
                 this.retrievedFromIncomplete = false;

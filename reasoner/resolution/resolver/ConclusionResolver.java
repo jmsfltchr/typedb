@@ -178,12 +178,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         RequestStatesTracker<Map<Identifier.Variable, Concept>> tracker = requestStatesTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        ExplorationState<Map<Identifier.Variable, Concept>> exploration;
-        if (tracker.isTracked(answerFromUpstream)) {
-            exploration = tracker.getExplorationState(answerFromUpstream);
-        } else {
-            exploration = tracker.newExplorationState(answerFromUpstream, Iterators.empty());
-        }
+        ExplorationState<Map<Identifier.Variable, Concept>> exploration = tracker.getExplorationState(answerFromUpstream);
         RequestState requestState = new RequestState(fromUpstream, exploration, iteration);
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated

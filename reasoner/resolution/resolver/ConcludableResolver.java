@@ -230,7 +230,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         } else {
             assert fromUpstream.partialAnswer().isMapped();
             FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
-            ExplorationState<ConceptMap> exploration = tracker.newExplorationState(answerFromUpstream, traversal);
+            ExplorationState<ConceptMap> exploration = tracker.getExplorationState(answerFromUpstream);
+            exploration.recordNewAnswers(traversal);
             RequestState requestState;
             if (!recursionState.hasReceived(answerFromUpstream)) {
                 recursionState.recordReceived(answerFromUpstream);

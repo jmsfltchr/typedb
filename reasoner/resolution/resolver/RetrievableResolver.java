@@ -121,16 +121,15 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class RequestState {
+    private static class RequestState extends Resolver.RequestState {
 
         private final Request fromUpstream;
         private final FunctionalIterator<ConceptMap> upstreamAnswers;
-        private final int iteration;
 
         public RequestState(Request fromUpstream, FunctionalIterator<ConceptMap> upstreamAnswers, int iteration) {
+            super(iteration);
             this.fromUpstream = fromUpstream;
             this.upstreamAnswers = upstreamAnswers;
-            this.iteration = iteration;
         }
 
         protected Partial<?> toUpstream(ConceptMap conceptMap) {
@@ -140,10 +139,6 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         public Optional<Partial<?>> nextAnswer() {
             if (!upstreamAnswers.hasNext()) return Optional.empty();
             return Optional.of(toUpstream(upstreamAnswers.next()));
-        }
-
-        public int iteration() {
-            return iteration;
         }
     }
 }

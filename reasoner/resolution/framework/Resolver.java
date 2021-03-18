@@ -200,17 +200,29 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected abstract static class CachingRequestState<ANSWER> {
+    protected static abstract class RequestState {
 
         private final int iteration;
+
+        protected RequestState(int iteration) {this.iteration = iteration;}
+
+        public abstract Optional<Partial<?>> nextAnswer();
+
+        public int iteration() {
+            return iteration;
+        }
+    }
+
+    protected abstract static class CachingRequestState<ANSWER> extends RequestState {
+
         protected final Request fromUpstream;
         protected final ExplorationState<ANSWER> explorationState;
         protected int pointer;
 
         public CachingRequestState(Request fromUpstream, ExplorationState<ANSWER> explorationState, int iteration) {
+            super(iteration);
             this.fromUpstream = fromUpstream;
             this.explorationState = explorationState;
-            this.iteration = iteration;
             this.pointer = 0;
         }
 
@@ -234,10 +246,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         protected abstract Optional<Partial<?>> toUpstream(ANSWER conceptMap);
 
         protected abstract boolean isDuplicate(ConceptMap conceptMap);
-
-        public int iteration() {
-            return iteration;
-        }
 
         protected abstract Optional<ANSWER> next();
 

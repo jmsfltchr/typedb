@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static grakn.common.collection.Collections.set;
@@ -49,8 +50,8 @@ public class Planner {
         this.logicMgr = logicMgr;
     }
 
-    public List<Resolvable<?>> plan(Set<Resolvable<?>> resolvables, Set<Retrievable> bound) {
-        return new Plan(resolvables, bound).plan;
+    public List<Resolvable<?>> plan(Set<Resolvable<?>> resolvables, Map<Resolvable<?>, Integer> resolvableStatistics, Set<Retrievable> boundVariables) {
+        return new Plan(resolvables, resolvableStatistics, boundVariables).plan;
     }
 
     class Plan {
@@ -58,13 +59,15 @@ public class Planner {
         private final Map<Resolvable<?>, Set<Retrievable>> dependencies;
         private final Set<Retrievable> answered;
         private final Set<Resolvable<?>> remaining;
+        private final List<Resolvable<?>> sortedByStatistics;
 
-        Plan(Set<Resolvable<?>> resolvables, Set<Retrievable> boundVars) {
+        Plan(Set<Resolvable<?>> resolvables, Map<Resolvable<?>, Integer> statistics, Set<Retrievable> boundVariables) {
             assert resolvables.size() > 0;
-            this.plan = new ArrayList<>();
-            this.answered = new HashSet<>(boundVars);
-            this.dependencies = dependencies(resolvables);
             this.remaining = new HashSet<>(resolvables);
+            this.sortedByStatistics = statistics.entrySet().stream().sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey).collect(Collectors.toList());
+            this.answered = new HashSet<>(boundVariables);
+            this.dependencies = dependencies(resolvables);
+            this.plan = new ArrayList<>();
             computePlan();
             assert plan.size() == resolvables.size();
             assert set(plan).equals(resolvables);
@@ -77,6 +80,8 @@ public class Planner {
         }
 
         private void computePlan() {
+            plan.addAll(sortedByStatistics);
+            remaining.removeAll(sortedByStatistics);
             while (remaining.size() != 0) {
                 Optional<Concludable> concludable;
                 Optional<grakn.core.logic.resolvable.Retrievable> retrievable;

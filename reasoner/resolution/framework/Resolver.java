@@ -332,7 +332,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         public ExplorationState<ANSWER> getExplorationState(ConceptMap fromUpstream) {
             if (!exploredRequestStates.containsKey(fromUpstream)) {
-                // TODO: Replace with a more efficient implementation
+                // TODO: Replace with a more efficient implementation: add an exploration state for each member of the
+                //  power set except when receiving from a retrievable. In that case use only an exact match.
                 ExplorationState<ANSWER> newExploration = new ExplorationState<>(fromUpstream, subsumption);
                 // register this state as the answer superset of any preexisting states
                 // register any other answer states that are answer supersets of this new state
@@ -400,10 +401,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             }
 
             public void setExhaustiveAnswers(List<ANSWER> exhaustiveAnswers) {
-                Set<ANSWER> answerSet = set(this.answers);
                 this.answers.addAll(iterate(exhaustiveAnswers)
                                             .filter(e -> !subsumption.containsAll(e, state))
-                                            .filter(e -> !answerSet.contains(e)).toList());
+                                            .filter(e -> !answersSet.contains(e)).toList());
                 setExhausted();
             }
 

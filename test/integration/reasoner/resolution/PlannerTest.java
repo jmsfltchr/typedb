@@ -38,6 +38,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -92,7 +93,7 @@ public class PlannerTest {
         Retrievable retrievable = new Retrievable(resolvedConjunction("{ $c($b); }", logicMgr));
 
         Set<Resolvable<?>> resolvables = set(concludable, retrievable);
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
         assertEquals(list(concludable, retrievable), plan);
     }
 
@@ -103,7 +104,7 @@ public class PlannerTest {
 
         Set<Resolvable<?>> resolvables = set(concludable, retrievable);
 
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
         assertEquals(list(retrievable, concludable), plan);
     }
 
@@ -128,7 +129,7 @@ public class PlannerTest {
 
         Set<Resolvable<?>> resolvables = set(retrievable, retrievable2, concludable);
 
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
         assertEquals(list(retrievable, concludable, retrievable2), plan);
     }
 
@@ -153,7 +154,7 @@ public class PlannerTest {
 
         Set<Resolvable<?>> resolvables = set(retrievable, retrievable2, concludable);
 
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
         assertEquals(list(retrievable2, concludable, retrievable), plan);
     }
 
@@ -164,7 +165,7 @@ public class PlannerTest {
 
         Set<Resolvable<?>> resolvables = set(concludable, concludable2);
 
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
         assertEquals(list(concludable, concludable2), plan);
     }
 
@@ -190,7 +191,7 @@ public class PlannerTest {
         Concludable concludable2 = Concludable.create(resolvedConjunction("{ $e($c, $p2) isa employment; }", logicMgr)).iterator().next();
 
         Set<Resolvable<?>> resolvables = set(retrievable, retrievable2, concludable, concludable2);
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
 
         assertEquals(list(retrievable, concludable, retrievable2, concludable2), plan);
     }
@@ -201,7 +202,7 @@ public class PlannerTest {
         Concludable concludable2 = Concludable.create(resolvedConjunction("{ $b has $a; }", logicMgr)).iterator().next();
 
         Set<Resolvable<?>> resolvables = set(concludable, concludable2);
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
 
         assertEquals(2, plan.size());
         assertEquals(set(concludable, concludable2), set(plan));
@@ -213,7 +214,7 @@ public class PlannerTest {
         Concludable concludable2 = Concludable.create(resolvedConjunction("{ $b($a); }", logicMgr)).iterator().next();
 
         Set<Resolvable<?>> resolvables = set(concludable, concludable2);
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
 
         assertEquals(2, plan.size());
         assertEquals(set(concludable, concludable2), set(plan));
@@ -225,7 +226,7 @@ public class PlannerTest {
         Concludable concludable2 = Concludable.create(resolvedConjunction("{ $c($d); }", logicMgr)).iterator().next();
 
         Set<Resolvable<?>> resolvables = set(concludable, concludable2);
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
 
         assertEquals(2, plan.size());
         assertEquals(set(concludable, concludable2), set(plan));
@@ -250,7 +251,7 @@ public class PlannerTest {
         Concludable concludable2 = Concludable.create(resolvedConjunction("{ $c($b) isa friendship; }", logicMgr)).iterator().next();
 
         Set<Resolvable<?>> resolvables = set(concludable, concludable2);
-        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, set());
+        List<Resolvable<?>> plan = new Planner(conceptMgr, logicMgr).plan(resolvables, new HashMap<>(), set());
 
         assertEquals(0, concludable.getApplicableRules(conceptMgr, logicMgr).toList().size());
         assertEquals(1, concludable2.getApplicableRules(conceptMgr, logicMgr).toList().size());

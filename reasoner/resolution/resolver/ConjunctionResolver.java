@@ -20,7 +20,9 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.Iterators;
+import grakn.core.concept.Concept;
 import grakn.core.concept.ConceptManager;
+import grakn.core.concept.answer.ConceptMap;
 import grakn.core.logic.LogicManager;
 import grakn.core.logic.resolvable.Concludable;
 import grakn.core.logic.resolvable.Negated;
@@ -91,7 +93,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         Request fromUpstream = fromUpstream(toDownstream);
         RequestState requestState = requestStates.get(fromUpstream);
 
-        Plans.Plan plan = plans.get(fromUpstream.partialAnswer().conceptMap().concepts().keySet());
+        Plans.Plan plan = plans.getActivePlan(fromUpstream.partialAnswer().conceptMap());
 
         // TODO: this is a bit of a hack, we want requests to a negation to be "single use", otherwise we can end up in an infinite loop
         // TODO: where the request to the negation never gets removed and we constantly re-request from it!
@@ -175,7 +177,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
     @Override
     protected RequestState requestStateCreate(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new RequestState for request: {}", name(), fromUpstream);
-        Plans.Plan plan = plans.getOrCreate(fromUpstream.partialAnswer().conceptMap().concepts().keySet(), resolvables, negateds);
+        Plans.Plan plan = plans.getOrCreate(fromUpstream.partialAnswer().conceptMap(), resolvables, negateds);
         assert !plan.isEmpty();
 
         RequestState requestState = requestStateNew(iteration);
@@ -191,7 +193,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
                                                  int newIteration) {
         assert newIteration > requestStatePrior.iteration();
         LOG.debug("{}: Updating RequestState for iteration '{}'", name(), newIteration);
-        Plans.Plan plan = plans.getOrCreate(fromUpstream.partialAnswer().conceptMap().concepts().keySet(), resolvables, negateds);
+        Plans.Plan plan = plans.getOrCreate(fromUpstream.partialAnswer().conceptMap(), resolvables, negateds);
 
         assert !plan.isEmpty();
         RequestState requestStateNextIteration = requestStateForIteration(requestStatePrior, newIteration);
@@ -217,22 +219,52 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
     }
 
     class Plans {
+        private final Map<ConceptMap, Plan> plans;
+        private final Map<Resolvable<?>, Map<Map<Variable.Retrievable, Concept>, Integer>> resolvablesStatistics;
 
-        Map<Set<Variable.Retrievable>, Plan> plans;
+        public Plans() {
+            this.plans = new HashMap<>();
+            this.resolvablesStatistics = new HashMap<>();
+        }
 
-        public Plans() { this.plans = new HashMap<>(); }
-
-        public Plan getOrCreate(Set<Variable.Retrievable> boundVars, Set<Resolvable<?>> resolvable, Set<Negated> negations) {
-            return plans.computeIfAbsent(boundVars, (bound) -> {
-                List<Resolvable<?>> plan = planner.plan(resolvable, bound);
+        public Plan getOrCreate(ConceptMap bounds, Set<Resolvable<?>> resolvables, Set<Negated> negations) {
+            Map<Resolvable<?>, Integer> statistics = updateResolvablesStatistics(resolvables, bounds);
+            return plans.computeIfAbsent(bounds, (ignored) -> {
+                List<Resolvable<?>> plan = planner.plan(resolvables, statistics, bounds.concepts().keySet());
                 plan.addAll(negations);
                 return new Plan(plan);
             });
         }
 
-        public Plan get(Set<Variable.Retrievable> boundVars) {
-            assert plans.containsKey(boundVars);
-            return plans.get(boundVars);
+        private Map<Resolvable<?>, Integer> updateResolvablesStatistics(Set<Resolvable<?>> resolvables, ConceptMap conceptMap) {
+            Map<Resolvable<?>, Integer> resolvableCounts = new HashMap<>();
+            for (Resolvable<?> resolvable : resolvables) {
+                resolvablesStatistics.putIfAbsent(resolvable, new HashMap<>());
+                Map<Map<Variable.Retrievable, Concept>, Integer> resolvableStatistics = resolvablesStatistics.get(resolvable);
+                Map<Variable.Retrievable, Concept> filtered = filterConceptMapForResolvable(resolvable, conceptMap);
+                if (!filtered.isEmpty()) {
+                    resolvableStatistics.putIfAbsent(filtered, 0);
+                    int newCount = resolvableStatistics.get(filtered) + 1;
+                    resolvableStatistics.put(filtered, newCount);
+                    resolvableCounts.put(resolvable, newCount);
+                }
+            }
+            return resolvableCounts;
+        }
+
+        private Map<Variable.Retrievable, Concept> filterConceptMapForResolvable(Resolvable<?> resolvable, ConceptMap conceptMap) {
+            Map<Variable.Retrievable, Concept> map = new HashMap<>();
+            conceptMap.concepts().forEach((variable, concept) -> {
+                if (resolvable.retrieves().contains(variable)) {
+                    map.put(variable, concept);
+                }
+            });
+            return map;
+        }
+
+        public Plan getActivePlan(ConceptMap bounds) {
+            assert plans.containsKey(bounds);
+            return plans.get(bounds);
         }
 
         public class Plan {

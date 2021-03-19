@@ -108,7 +108,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration));
+        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration, new ConceptMapSubsumption()));
         return new RequestState(fromUpstream, traversal, iteration);
     }
 
@@ -118,6 +118,14 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
             failToUpstream(fromUpstream, iteration);
+        }
+    }
+
+    private static class ConceptMapSubsumption extends RequestStatesTracker.Subsumption<ConceptMap> {
+
+        @Override
+        protected boolean containsAll(ConceptMap conceptMap, ConceptMap contained) {
+            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
         }
     }
 

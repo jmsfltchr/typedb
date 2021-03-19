@@ -174,7 +174,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private RequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration));
+        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration, new FullMapSubsumption()));
         RequestStatesTracker<Map<Identifier.Variable, Concept>> tracker = requestStatesTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
@@ -208,6 +208,14 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     @Override
     public String toString() {
         return name() + ": then " + conclusion.rule().then();
+    }
+
+    private static class FullMapSubsumption extends RequestStatesTracker.Subsumption<Map<Identifier.Variable, Concept>> {
+
+        @Override
+        protected boolean containsAll(Map<Identifier.Variable, Concept> map, ConceptMap contained) {
+            return map.entrySet().containsAll(contained.concepts().entrySet());
+        }
     }
 
     private static class RequestState extends CachingRequestState<Map<Identifier.Variable, Concept>> {

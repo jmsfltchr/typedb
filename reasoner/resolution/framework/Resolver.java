@@ -53,8 +53,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import java.util.BitSet;
+import java.util.TreeSet;
+
+import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
+import static grakn.core.common.iterator.Iterators.iterate;
 import static grakn.core.common.parameters.Arguments.Query.Producer.INCREMENTAL;
 
 public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Actor<RESOLVER> {
@@ -250,12 +255,64 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
     }
 
+    public class PowerSet<E> implements Iterator<Set<E>>,Iterable<Set<E>>{
+        private E[] arr = null;
+        private BitSet bset = null;
+
+        @SuppressWarnings("unchecked")
+        public PowerSet(Set<E> set)
+        {
+            arr = (E[])set.toArray();
+            bset = new BitSet(arr.length + 1);
+        }
+
+        @Override
+        public boolean hasNext() {
+            return !bset.get(arr.length);
+        }
+
+        @Override
+        public Set<E> next() {
+            Set<E> returnSet = new TreeSet<E>();
+            for(int i = 0; i < arr.length; i++)
+            {
+                if(bset.get(i))
+                    returnSet.add(arr[i]);
+            }
+            //increment bset
+            for(int i = 0; i < bset.size(); i++)
+            {
+                if(!bset.get(i))
+                {
+                    bset.set(i);
+                    break;
+                }else
+                    bset.clear(i);
+            }
+
+            return returnSet;
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("Not Supported!");
+        }
+
+        @Override
+        public Iterator<Set<E>> iterator() {
+            return this;
+        }
+
+    }
+
     public static class RequestStatesTracker<ANSWER> {
         HashMap<ConceptMap, ExplorationState<ANSWER>> exploredRequestStates;
         private int iteration;
+        private final Subsumption<ANSWER> subsumption;
 
-        public RequestStatesTracker(int iteration) {
+        public RequestStatesTracker(int iteration, Subsumption<ANSWER> subsumption) {
             this.iteration = iteration;
+            this.subsumption = subsumption;
             this.exploredRequestStates = new HashMap<>();
         }
 
@@ -274,36 +331,95 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         public ExplorationState<ANSWER> getExplorationState(ConceptMap fromUpstream) {
-            exploredRequestStates.putIfAbsent(fromUpstream, new ExplorationState<>());
+            if (!exploredRequestStates.containsKey(fromUpstream)) {
+                // TODO: Replace with a more efficient implementation
+                ExplorationState<ANSWER> newExploration = new ExplorationState<>(fromUpstream, subsumption);
+                // register this state as the answer superset of any preexisting states
+                // register any other answer states that are answer supersets of this new state
+                for (Map.Entry<ConceptMap, ExplorationState<ANSWER>> e : exploredRequestStates.entrySet()) {
+                    ConceptMap conceptMap = e.getKey();
+                    ExplorationState<ANSWER> exploration = e.getValue();
+                    if (conceptMap.concepts().entrySet().containsAll(fromUpstream.concepts().entrySet())) {
+                        // then conceptMap is a subset, fromUpstream is a superset
+                        exploration.hasExplorationSuperset(newExploration);
+                    }
+                    if (fromUpstream.concepts().entrySet().containsAll(conceptMap.concepts().entrySet())) {
+                        // then fromUpstream is a subset, conceptMap is a superset
+                        newExploration.hasExplorationSuperset(exploration);
+                    }
+                }
+                exploredRequestStates.put(fromUpstream, newExploration);
+            }
             return exploredRequestStates.get(fromUpstream);
+        }
+
+        public static abstract class Subsumption<ANSWER> {
+            protected abstract boolean containsAll(ANSWER answer, ConceptMap contained);
         }
 
         public static class ExplorationState<ANSWER> {
 
             private final List<ANSWER> answers;
             private final Set<ANSWER> answersSet;
+            private final Set<ExplorationState<ANSWER>> explorationSupersets;
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
             private FunctionalIterator<ANSWER> traversal;
+            private boolean exhausted;
+            private final ConceptMap state;
+            private Subsumption<ANSWER> subsumption;
 
-            private ExplorationState() {
+            private ExplorationState(ConceptMap state, Subsumption<ANSWER> subsumption) {
+                this.state = state;
+                this.subsumption = subsumption;
                 this.traversal = Iterators.empty();
                 this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
                 this.answersSet = new HashSet<>();
                 this.retrievedFromIncomplete = false;
                 this.requiresReiteration = false;
+                this.exhausted = false;
+                this.explorationSupersets = new HashSet<>();
             }
 
             public void recordNewAnswer(ANSWER newAnswer) {
+                if (exhausted()) throw GraknException.of(ILLEGAL_STATE);
                 newAnswer(newAnswer);
             }
 
             public void recordNewAnswers(Iterator<ANSWER> newAnswers) {
+                if (exhausted()) throw GraknException.of(ILLEGAL_STATE);
                 traversal = traversal.link(newAnswers);
             }
 
             public void setRequiresReiteration() {
                 this.requiresReiteration = true;
+            }
+
+            public void setExhausted() {
+                exhausted = true;
+            }
+
+            public void setExhaustiveAnswers(List<ANSWER> exhaustiveAnswers) {
+                Set<ANSWER> answerSet = set(this.answers);
+                this.answers.addAll(iterate(exhaustiveAnswers)
+                                            .filter(e -> !subsumption.containsAll(e, state))
+                                            .filter(e -> !answerSet.contains(e)).toList());
+                setExhausted();
+            }
+
+            public boolean exhausted() {
+                if (exhausted) return true;
+                for (ExplorationState<ANSWER> e : explorationSupersets) {
+                    if (e.exhausted()) {
+                        setExhaustiveAnswers(answers);
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            public void hasExplorationSuperset(ExplorationState<ANSWER> newExploration) {
+                explorationSupersets.add(newExploration);
             }
 
             public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {

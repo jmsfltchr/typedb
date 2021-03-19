@@ -185,6 +185,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             if (requestState.isExploration() && (exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
                 requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
+                requestState.setExhausted();
                 failToUpstream(fromUpstream, iteration);
             }
         }
@@ -216,7 +217,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             recursionState.nextIteration(iteration);
         }
 
-        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration));
+        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration, new ConceptMapSubsumption()));
         RequestStatesTracker<ConceptMap> tracker = requestStatesTrackers.get(root);
         if (tracker.iteration() < iteration) {
             tracker.nextIteration(iteration);
@@ -229,9 +230,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             return new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
         } else {
             assert fromUpstream.partialAnswer().isMapped();
-            FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
             ExplorationState<ConceptMap> exploration = tracker.getExplorationState(answerFromUpstream);
-            exploration.recordNewAnswers(traversal);
+            if (!exploration.exhausted()) {
+                FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
+                exploration.recordNewAnswers(traversal);
+            }
             RequestState requestState;
             if (!recursionState.hasReceived(answerFromUpstream)) {
                 recursionState.recordReceived(answerFromUpstream);
@@ -271,6 +274,14 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 missingBounds.add(var.asThing().id().asRetrievable());
         });
         return missingBounds;
+    }
+
+    private static class ConceptMapSubsumption extends RequestStatesTracker.Subsumption<ConceptMap> {
+
+        @Override
+        protected boolean containsAll(ConceptMap conceptMap, ConceptMap contained) {
+            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
+        }
     }
 
     protected abstract static class RequestState extends Resolver.CachingRequestState<ConceptMap> {
@@ -315,6 +326,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public boolean singleAnswerRequired() {
             return singleAnswerRequired;
+        }
+
+        public void setExhausted() {
+            explorationState.setExhausted();
         }
     }
 

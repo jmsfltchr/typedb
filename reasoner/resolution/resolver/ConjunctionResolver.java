@@ -230,7 +230,6 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         }
 
         public Plan create(Request fromUpstream, Set<Resolvable<?>> resolvables, Set<Negated> negations) {
-            assert !activePlans.containsKey(fromUpstream);
             ConceptMap bounds = fromUpstream.partialAnswer().conceptMap();
             Map<Resolvable<?>, Integer> statistics = updateResolvablesStatistics(resolvables, bounds);
             Plan plan = plans.computeIfAbsent(bounds, (ignored) -> {

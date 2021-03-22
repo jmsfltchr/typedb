@@ -182,10 +182,14 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             answerFound(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
             RuleExplorationRequestState exploration;
-            if (requestState.isExploration() && (exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
-                requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
+            if (requestState.isExploration()) {
+                if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
+                    requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
+                } else {
+                    requestState.setExhausted();
+                    failToUpstream(fromUpstream, iteration);
+                }
             } else {
-                requestState.setExhausted();
                 failToUpstream(fromUpstream, iteration);
             }
         }

@@ -64,7 +64,7 @@ public class Planner {
         Plan(Set<Resolvable<?>> resolvables, Map<Resolvable<?>, Integer> statistics, Set<Retrievable> boundVariables) {
             assert resolvables.size() > 0;
             this.remaining = new HashSet<>(resolvables);
-            this.sortedByStatistics = statistics.entrySet().stream().sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey).collect(Collectors.toList());
+            this.sortedByStatistics = statistics.entrySet().stream().sorted(Collections.reverseOrder(Map.Entry.comparingByValue())).map(Map.Entry::getKey).collect(Collectors.toList());
             this.answered = new HashSet<>(boundVariables);
             this.dependencies = dependencies(resolvables);
             this.plan = new ArrayList<>();

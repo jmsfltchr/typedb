@@ -98,5 +98,59 @@ public class GrablTest {
         // Message count: 3800 Test took 3042 milliseconds
         // Message count: 4500 Test took 3154 milliseconds
         // Test took 2985 milliseconds Message count: 3800; Test took 3085 milliseconds Message count: 3800 (iteration 0); Test took 3081 milliseconds Message count: 4500 (iteration 0)
+        // Reversing plan order to prioritise most visited: Message count: 35300 (iteration 0) Test took 6399 milliseconds; Message count: 35400 (iteration 0) Test took 6758 milliseconds;
+    }
+
+    @Test
+    public void number_of_private_grakn_repos() {
+        session = grakn.session(database, Arguments.Session.Type.DATA);
+        rocksTransaction = session.transaction(Arguments.Transaction.Type.READ, new Options.Transaction().infer(false));
+        long startTime = System.currentTimeMillis();
+        List<ConceptMap> answers = rocksTransaction.query()
+                .match(Graql.parseQuery("match\n" +
+                                                "$user isa user, has name \"lriuui0x0\" ;\n" +
+                                                "(org: $o, member: $user) isa org-member;\n" +
+                                                "(repo: $r, owner: $o) isa repo-owner;\n" +
+                                                "$r isa repository, has private true;\n").asMatch(),
+                       new Context.Query(rocksTransaction.context(), new Options.Query().parallel(false))).toList();
+        long endTime = System.currentTimeMillis();
+        System.out.println("Test took " + (endTime - startTime) + " milliseconds");
+        assertEquals(26, answers.size());
+    }
+
+    @Test
+    public void ruis_number_of_forks() {
+        session = grakn.session(database, Arguments.Session.Type.DATA);
+        rocksTransaction = session.transaction(Arguments.Transaction.Type.READ, new Options.Transaction().infer(false));
+        long startTime = System.currentTimeMillis();
+        List<ConceptMap> answers = rocksTransaction.query()
+                .match(Graql.parseQuery("match\n" +
+                                                "$user isa user, has name \"lriuui0x0\" ;\n" +
+                                                "(org: $o, member: $user) isa org-member;\n" +
+                                                "(repo: $r, owner: $o) isa repo-owner;\n" +
+                                                "$r isa repository, has private true;\n" +
+                                                "(parent: $r, child: $rc) isa repo-fork;").asMatch(),
+                       new Context.Query(rocksTransaction.context(), new Options.Query().parallel(false))).toList();
+        long endTime = System.currentTimeMillis();
+        System.out.println("Test took " + (endTime - startTime) + " milliseconds");
+        assertEquals(17, answers.size());
+    }
+
+    @Test
+    public void graknlabs_number_of_forks() {
+        session = grakn.session(database, Arguments.Session.Type.DATA);
+        rocksTransaction = session.transaction(Arguments.Transaction.Type.READ, new Options.Transaction().infer(false));
+        long startTime = System.currentTimeMillis();
+        List<ConceptMap> answers = rocksTransaction.query()
+                .match(Graql.parseQuery("match\n" +
+                                                "$owner isa organisation, has name \"graknlabs\" ;\n" +
+                                                "(owner: $owner, repo: $repo) isa repo-owner ;\n" +
+                                                "$repo isa repository, has name $name ;\n" +
+//                                                "(parent: $repo, child: $rc) isa repo-fork;\n").asMatch(), // 93 answers
+                                                "(parent: $r, child: $repo) isa repo-fork;\n").asMatch(), // 0 answers
+                       new Context.Query(rocksTransaction.context(), new Options.Query().parallel(false))).toList();
+        long endTime = System.currentTimeMillis();
+        System.out.println("Test took " + (endTime - startTime) + " milliseconds");
+        assertEquals(0, answers.size());
     }
 }

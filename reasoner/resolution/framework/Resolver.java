@@ -396,8 +396,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             }
 
             public void recordNewAnswer(ANSWER newAnswer) {
-                if (exhausted()) throw GraknException.of(ILLEGAL_STATE);
-                newAnswer(newAnswer);
+                if (!exhausted()) newAnswer(newAnswer);
             }
 
             public void recordNewAnswers(Iterator<ANSWER> newAnswers) {

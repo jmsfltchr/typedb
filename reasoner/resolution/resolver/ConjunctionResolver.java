@@ -93,7 +93,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         Request fromUpstream = fromUpstream(toDownstream);
         RequestState requestState = requestStates.get(fromUpstream);
 
-        Plans.Plan plan = plans.getActivePlan(fromUpstream.partialAnswer().conceptMap());
+        Plans.Plan plan = plans.getActive(fromUpstream);
 
         // TODO: this is a bit of a hack, we want requests to a negation to be "single use", otherwise we can end up in an infinite loop
         // TODO: where the request to the negation never gets removed and we constantly re-request from it!
@@ -177,7 +177,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
     @Override
     protected RequestState requestStateCreate(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new RequestState for request: {}", name(), fromUpstream);
-        Plans.Plan plan = plans.getOrCreate(fromUpstream.partialAnswer().conceptMap(), resolvables, negateds);
+        Plans.Plan plan = plans.create(fromUpstream, resolvables, negateds);
         assert !plan.isEmpty();
 
         RequestState requestState = requestStateNew(iteration);
@@ -193,7 +193,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
                                                  int newIteration) {
         assert newIteration > requestStatePrior.iteration();
         LOG.debug("{}: Updating RequestState for iteration '{}'", name(), newIteration);
-        Plans.Plan plan = plans.getOrCreate(fromUpstream.partialAnswer().conceptMap(), resolvables, negateds);
+        Plans.Plan plan = plans.create(fromUpstream, resolvables, negateds);
 
         assert !plan.isEmpty();
         RequestState requestStateNextIteration = requestStateForIteration(requestStatePrior, newIteration);
@@ -220,20 +220,31 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
     class Plans {
         private final Map<ConceptMap, Plan> plans;
+        private final Map<Request, Plan> activePlans;
         private final Map<Resolvable<?>, Map<Map<Variable.Retrievable, Concept>, Integer>> resolvablesStatistics;
 
         public Plans() {
             this.plans = new HashMap<>();
+            this.activePlans = new HashMap<>();
             this.resolvablesStatistics = new HashMap<>();
         }
 
-        public Plan getOrCreate(ConceptMap bounds, Set<Resolvable<?>> resolvables, Set<Negated> negations) {
+        public Plan create(Request fromUpstream, Set<Resolvable<?>> resolvables, Set<Negated> negations) {
+            assert !activePlans.containsKey(fromUpstream);
+            ConceptMap bounds = fromUpstream.partialAnswer().conceptMap();
             Map<Resolvable<?>, Integer> statistics = updateResolvablesStatistics(resolvables, bounds);
-            return plans.computeIfAbsent(bounds, (ignored) -> {
-                List<Resolvable<?>> plan = planner.plan(resolvables, statistics, bounds.concepts().keySet());
-                plan.addAll(negations);
-                return new Plan(plan);
+            Plan plan = plans.computeIfAbsent(bounds, (ignored) -> {
+                List<Resolvable<?>> newPlan = planner.plan(resolvables, statistics, bounds.concepts().keySet());
+                newPlan.addAll(negations);
+                return new Plan(newPlan);
             });
+            activePlans.put(fromUpstream, plan);
+            return plan;
+        }
+
+        public Plan getActive(Request fromUpstream) {
+            assert activePlans.containsKey(fromUpstream);
+            return activePlans.get(fromUpstream);
         }
 
         private Map<Resolvable<?>, Integer> updateResolvablesStatistics(Set<Resolvable<?>> resolvables, ConceptMap conceptMap) {
@@ -260,11 +271,6 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
                 }
             });
             return map;
-        }
-
-        public Plan getActivePlan(ConceptMap bounds) {
-            assert plans.containsKey(bounds);
-            return plans.get(bounds);
         }
 
         public class Plan {

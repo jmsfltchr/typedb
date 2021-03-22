@@ -253,6 +253,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected abstract Optional<ANSWER> next();
 
+        public boolean exhausted() {
+            return explorationState.exhausted();
+        }
     }
 
     public class PowerSet<E> implements Iterator<Set<E>>,Iterable<Set<E>>{

@@ -335,23 +335,36 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 // TODO: Replace with a more efficient implementation: add an exploration state for each member of the
                 //  power set except when receiving from a retrievable. In that case use only an exact match.
                 ExplorationState<ANSWER> newExploration = new ExplorationState<>(fromUpstream, subsumption);
-                // register this state as the answer superset of any preexisting states
-                // register any other answer states that are answer supersets of this new state
-                for (Map.Entry<ConceptMap, ExplorationState<ANSWER>> e : exploredRequestStates.entrySet()) {
-                    ConceptMap conceptMap = e.getKey();
-                    ExplorationState<ANSWER> exploration = e.getValue();
-                    if (conceptMap.concepts().entrySet().containsAll(fromUpstream.concepts().entrySet())) {
-                        // then conceptMap is a subset, fromUpstream is a superset
-                        exploration.hasExplorationSuperset(newExploration);
+
+                powerSet(fromUpstream.concepts().entrySet()).forEach(s -> {
+                    HashMap<Retrievable, Concept> map = new HashMap<>();
+                    s.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
+                    ConceptMap conceptMapSubSet = new ConceptMap(map);
+                    ExplorationState<ANSWER> explorationSuperset;
+                    if (exploredRequestStates.containsKey(conceptMapSubSet)) {
+                        explorationSuperset = exploredRequestStates.get(conceptMapSubSet);
+                    } else {
+                        explorationSuperset = new ExplorationState<>(conceptMapSubSet, subsumption);
                     }
-                    if (fromUpstream.concepts().entrySet().containsAll(conceptMap.concepts().entrySet())) {
-                        // then fromUpstream is a subset, conceptMap is a superset
-                        newExploration.hasExplorationSuperset(exploration);
-                    }
-                }
+                    newExploration.hasExplorationSuperset(explorationSuperset);
+                });
                 exploredRequestStates.put(fromUpstream, newExploration);
             }
             return exploredRequestStates.get(fromUpstream);
+        }
+
+        /**
+         * Power set implementation, but omitting the trivial empty set
+         */
+        public static <T> Set<Set<T>> powerSet(Set<T> set) {
+            Set<Set<T>> powerSet = new HashSet<>();
+            powerSet.add(set);
+            set.forEach(el -> {
+                Set<T> s = new HashSet<>(set);
+                s.remove(el);
+                powerSet.addAll(powerSet(s));
+            });
+            return powerSet;
         }
 
         public static abstract class Subsumption<ANSWER> {
@@ -368,7 +381,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private FunctionalIterator<ANSWER> traversal;
             private boolean exhausted;
             private final ConceptMap state;
-            private Subsumption<ANSWER> subsumption;
+            private final Subsumption<ANSWER> subsumption;
 
             private ExplorationState(ConceptMap state, Subsumption<ANSWER> subsumption) {
                 this.state = state;

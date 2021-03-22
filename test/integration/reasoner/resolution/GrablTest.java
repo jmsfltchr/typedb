@@ -95,5 +95,6 @@ public class GrablTest {
         assertEquals(81, answers.size());
         // Message count: 24800 Test took 5523 milliseconds
         // Message count: 3800 Test took 3226 milliseconds
+        // Message count: 3800 Test took 3042 milliseconds
     }
 }

@@ -148,7 +148,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Optional<Partial<?>> upstreamAnswer = requestState.nextAnswer();
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
-        } else if (requestState.downstreamManager().hasDownstream()) {
+        } else if (!requestState.exhausted() && requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
             failToUpstream(fromUpstream, iteration);

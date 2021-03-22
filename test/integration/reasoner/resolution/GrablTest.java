@@ -99,6 +99,7 @@ public class GrablTest {
         // Message count: 4500 Test took 3154 milliseconds
         // Test took 2985 milliseconds Message count: 3800; Test took 3085 milliseconds Message count: 3800 (iteration 0); Test took 3081 milliseconds Message count: 4500 (iteration 0)
         // Reversing plan order to prioritise most visited: Message count: 35300 (iteration 0) Test took 6399 milliseconds; Message count: 35400 (iteration 0) Test took 6758 milliseconds;
+        // With retrievable cache re-enabled: Message count: 34300 (iteration 0) Test took 5445 milliseconds; Message count: 34700 Test took 5025 milliseconds;
     }
 
     @Test

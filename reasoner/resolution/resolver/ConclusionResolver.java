@@ -19,7 +19,6 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
-import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.Concept;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
@@ -39,8 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -178,7 +175,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         RequestStatesTracker<Map<Identifier.Variable, Concept>> tracker = requestStatesTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        ExplorationState<Map<Identifier.Variable, Concept>> exploration = tracker.getExplorationState(answerFromUpstream);
+        ExplorationState<Map<Identifier.Variable, Concept>> exploration = tracker.getOrCreateExplorationState(answerFromUpstream, true);
         RequestState requestState = new RequestState(fromUpstream, exploration, iteration);
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated

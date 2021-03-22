@@ -230,11 +230,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
         if (tracker.isTracked(answerFromUpstream)) {
-            ExplorationState<ConceptMap> exploration = tracker.getExplorationState(answerFromUpstream);
+            ExplorationState<ConceptMap> exploration = tracker.getOrCreateExplorationState(answerFromUpstream, true);
             return new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
         } else {
             assert fromUpstream.partialAnswer().isMapped();
-            ExplorationState<ConceptMap> exploration = tracker.getExplorationState(answerFromUpstream);
+            ExplorationState<ConceptMap> exploration = tracker.getOrCreateExplorationState(answerFromUpstream, true);
             if (!exploration.exhausted()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 exploration.recordNewAnswers(traversal);

@@ -110,7 +110,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration, new ConceptMapSubsumption()));
-        ExplorationState<ConceptMap> exploration = requestStatesTrackers.get(root).getExplorationState(answerFromUpstream);
+        ExplorationState<ConceptMap> exploration = requestStatesTrackers.get(root).getOrCreateExplorationState(answerFromUpstream, false);
         exploration.recordNewAnswers(traversal);
         return new RequestState(fromUpstream, exploration, iteration);
     }

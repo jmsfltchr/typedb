@@ -333,27 +333,30 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             exploredRequestStates = new HashMap<>();
         }
 
-        public ExplorationState<ANSWER> getExplorationState(ConceptMap fromUpstream) {
+        public ExplorationState<ANSWER> getOrCreateExplorationState(ConceptMap fromUpstream, boolean registerSubsumers) {
             if (!exploredRequestStates.containsKey(fromUpstream)) {
-                // TODO: Replace with a more efficient implementation: add an exploration state for each member of the
-                //  power set except when receiving from a retrievable. In that case use only an exact match.
                 ExplorationState<ANSWER> newExploration = new ExplorationState<>(fromUpstream, subsumption);
-
-                powerSet(fromUpstream.concepts().entrySet()).forEach(s -> {
-                    HashMap<Retrievable, Concept> map = new HashMap<>();
-                    s.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
-                    ConceptMap conceptMapSubSet = new ConceptMap(map);
-                    ExplorationState<ANSWER> explorationSuperset;
-                    if (exploredRequestStates.containsKey(conceptMapSubSet)) {
-                        explorationSuperset = exploredRequestStates.get(conceptMapSubSet);
-                    } else {
-                        explorationSuperset = new ExplorationState<>(conceptMapSubSet, subsumption);
-                    }
-                    newExploration.registerSubsumption(explorationSuperset);
-                });
+                if (registerSubsumers) getSubsumingStates(fromUpstream).forEach(newExploration::registerSubsumption);
                 exploredRequestStates.put(fromUpstream, newExploration);
             }
             return exploredRequestStates.get(fromUpstream);
+        }
+
+        private Set<ExplorationState<ANSWER>> getSubsumingStates(ConceptMap fromUpstream) {
+            Set<ExplorationState<ANSWER>> subsumingStates = new HashSet<>();
+            powerSet(fromUpstream.concepts().entrySet()).forEach(s -> {
+                HashMap<Retrievable, Concept> map = new HashMap<>();
+                s.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
+                ConceptMap conceptMapSubSet = new ConceptMap(map);
+                ExplorationState<ANSWER> subsumingState;
+                if (exploredRequestStates.containsKey(conceptMapSubSet)) {
+                    subsumingState = exploredRequestStates.get(conceptMapSubSet);
+                } else {
+                    subsumingState = new ExplorationState<>(conceptMapSubSet, subsumption);
+                }
+                subsumingStates.add(subsumingState);
+            });
+            return subsumingStates;
         }
 
         /**

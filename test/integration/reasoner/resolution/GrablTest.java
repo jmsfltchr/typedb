@@ -96,5 +96,6 @@ public class GrablTest {
         // Message count: 24800 Test took 5523 milliseconds
         // Message count: 3800 Test took 3226 milliseconds
         // Message count: 3800 Test took 3042 milliseconds
+        // Message count: 4500 Test took 3154 milliseconds
     }
 }

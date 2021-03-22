@@ -346,7 +346,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                     } else {
                         explorationSuperset = new ExplorationState<>(conceptMapSubSet, subsumption);
                     }
-                    newExploration.hasExplorationSuperset(explorationSuperset);
+                    newExploration.registerSubsumption(explorationSuperset);
                 });
                 exploredRequestStates.put(fromUpstream, newExploration);
             }
@@ -375,7 +375,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
             private final List<ANSWER> answers;
             private final Set<ANSWER> answersSet;
-            private final Set<ExplorationState<ANSWER>> explorationSupersets;
+            private final Set<ExplorationState<ANSWER>> subsumingExplorations;
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
             private FunctionalIterator<ANSWER> traversal;
@@ -392,7 +392,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.retrievedFromIncomplete = false;
                 this.requiresReiteration = false;
                 this.exhausted = false;
-                this.explorationSupersets = new HashSet<>();
+                this.subsumingExplorations = new HashSet<>();
             }
 
             public void recordNewAnswer(ANSWER newAnswer) {
@@ -422,7 +422,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
             public boolean exhausted() {
                 if (exhausted) return true;
-                for (ExplorationState<ANSWER> e : explorationSupersets) {
+                for (ExplorationState<ANSWER> e : subsumingExplorations) {
                     if (e.exhausted()) {
                         setExhaustiveAnswers(answers);
                         return true;
@@ -431,8 +431,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 return false;
             }
 
-            public void hasExplorationSuperset(ExplorationState<ANSWER> newExploration) {
-                explorationSupersets.add(newExploration);
+            public void registerSubsumption(ExplorationState<ANSWER> newExploration) {
+                subsumingExplorations.add(newExploration);
             }
 
             public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {

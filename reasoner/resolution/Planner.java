@@ -131,6 +131,7 @@ public class Planner {
                 concludable = sortedByStatistics(remaining.stream().filter(Resolvable::isConcludable))
                         .map(Resolvable::asConcludable);
                 if (concludable.isPresent()) {
+                    // TODO: This should trigger reiteration
                     add(concludable.get());
                     continue;
                 }

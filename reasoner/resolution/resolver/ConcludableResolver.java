@@ -229,6 +229,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
+        assert tracker.isTracked(answerFromUpstream) == recursionState.hasReceived(answerFromUpstream); // TODO: Should be the same, and therefore can remove this part of recursionState
         if (tracker.isTracked(answerFromUpstream)) {
             CacheTracker<ConceptMap>.AnswerCache answerCache = tracker.getAnswerCache(answerFromUpstream);
             RetrievalRequestState requestState = new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
@@ -333,10 +334,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public boolean singleAnswerRequired() {
             return singleAnswerRequired;
-        }
-
-        public void setExhausted() {
-            answerCache.setExhausted();
         }
     }
 

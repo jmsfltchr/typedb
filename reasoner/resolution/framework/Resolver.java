@@ -227,15 +227,15 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         public Optional<Partial<?>> nextAnswer() {
-            boolean exhausted = false;
+            boolean endOfAnswers = false;
             Optional<Partial<?>> upstreamAnswer = Optional.empty();
-            while (!exhausted) {
+            while (!endOfAnswers) {
                 Optional<ANSWER> answer = next();
                 if (answer.isPresent()) {
                     pointer++;
                     upstreamAnswer = toUpstream(answer.get());
                 } else {
-                    exhausted = true;
+                    endOfAnswers = true;
                 }
                 upstreamAnswer = upstreamAnswer.filter(partial -> !isDuplicate(partial.conceptMap()));
                 if (upstreamAnswer.isPresent()) break;
@@ -367,7 +367,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 exhausted = true;
             }
 
-            public void setExhaustiveAnswers(List<ANSWER> exhaustiveAnswers) {
+            public void setExhausted(List<ANSWER> exhaustiveAnswers) {
                 this.answers.addAll(iterate(exhaustiveAnswers)
                                             .filter(e -> !subsumption.subsumes(e, state))
                                             .filter(e -> !answersSet.contains(e)).toList());
@@ -378,8 +378,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 if (exhausted) return true;
                 for (ConceptMap subsumingAnswer : subsumingAnswers) {
                     if (answerCaches.containsKey(subsumingAnswer)){
-                        if (answerCaches.get(subsumingAnswer).exhausted()) {
-                            setExhaustiveAnswers(answers);
+                        AnswerCache subsumingCache;
+                        if ((subsumingCache = answerCaches.get(subsumingAnswer)).exhausted()) {
+                            setExhausted(subsumingCache.answers);
                             return true;
                         }
                     }

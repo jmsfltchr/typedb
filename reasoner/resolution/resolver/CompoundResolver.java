@@ -33,8 +33,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public abstract class CompoundResolver<
-        RESOLVER extends CompoundResolver<RESOLVER>> extends Resolver<RESOLVER> {
+public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVER>> extends Resolver<RESOLVER> {
 
     private static final Logger LOG = LoggerFactory.getLogger(CompoundResolver.class);
 

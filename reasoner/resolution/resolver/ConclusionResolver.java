@@ -175,7 +175,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         CacheTracker<Map<Identifier.Variable, Concept>> tracker = cacheTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        AnswerCache<Map<Identifier.Variable, Concept>> answerCache = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
+        AnswerCache answerCache = tracker.createAnswerCache(answerFromUpstream, true);
         RequestState requestState = new RequestState(fromUpstream, answerCache, iteration);
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
@@ -221,7 +221,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final ProducedRecorder producedRecorder;
 
 
-        public RequestState(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>> answerCache, int iteration) {
+        public RequestState(Request fromUpstream, AnswerCache answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder();

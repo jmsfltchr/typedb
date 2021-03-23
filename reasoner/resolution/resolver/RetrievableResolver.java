@@ -110,7 +110,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         cacheTrackers.putIfAbsent(root, new CacheTracker<>(iteration, new ConceptMapSubsumption()));
-        AnswerCache<ConceptMap> answerCache = cacheTrackers.get(root).getOrCreateAnswerCache(answerFromUpstream, false);
+        AnswerCache answerCache = cacheTrackers.get(root).createAnswerCache(answerFromUpstream, false);
         answerCache.recordNewAnswers(traversal);
         return new RequestState(fromUpstream, answerCache, iteration);
     }
@@ -134,7 +134,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
-        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration) {
+        public RequestState(Request fromUpstream, AnswerCache answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
         }
 

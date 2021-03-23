@@ -81,13 +81,12 @@ public class Planner {
 
         private void computePlan() {
             while (remaining.size() != 0) {
-                Optional<Resolvable<?>> resolvable;
                 Optional<Concludable> concludable;
                 Optional<grakn.core.logic.resolvable.Retrievable> retrievable;
 
                 // Retrievable where:
+                // it is connected
                 // all of it's dependencies are already satisfied,
-                // which will answer the most variables
                 retrievable = sortedByStatistics(dependenciesSatisfied(hasAnsweredVar(remaining.stream().filter(Resolvable::isRetrievable))))
                         .map(Resolvable::asRetrievable);
                 if (retrievable.isPresent()) {
@@ -95,19 +94,40 @@ public class Planner {
                     continue;
                 }
 
-                // Resolvable where:
+                // Concludable where:
+                // it is connected
                 // all of it's dependencies are already satisfied,
-                // sorted by the number of times we've seen it before
-                resolvable = sortedByStatistics(dependenciesSatisfied(hasAnsweredVar(remaining.stream())));
-                if (resolvable.isPresent()) {
-                    add(resolvable.get());
+                concludable = sortedByStatistics(dependenciesSatisfied(hasAnsweredVar(remaining.stream().filter(Resolvable::isConcludable))))
+                        .map(Resolvable::asConcludable);
+                if (concludable.isPresent()) {
+                    add(concludable.get());
+                    continue;
+                }
+
+                // Retrievable where:
+                // it can be disconnected
+                // all of it's dependencies are already satisfied (should be moot),
+                // it can be disconnected
+                retrievable = sortedByStatistics(dependenciesSatisfied(remaining.stream().filter(Resolvable::isRetrievable)))
+                        .map(Resolvable::asRetrievable);
+                if (retrievable.isPresent()) {
+                    add(retrievable.get());
                     continue;
                 }
 
                 // Concludable where:
                 // it can be disconnected
-                // all of it's dependencies are NOT already satisfied,
-                // sorted by the number of times we've seen is before
+                // all of it's dependencies are already satisfied
+                concludable = sortedByStatistics(dependenciesSatisfied(remaining.stream().filter(Resolvable::isConcludable)))
+                        .map(Resolvable::asConcludable);
+                if (concludable.isPresent()) {
+                    add(concludable.get());
+                    continue;
+                }
+
+                // Concludable where:
+                // it can be disconnected
+                // all of it's dependencies are NOT already satisfied
                 concludable = sortedByStatistics(remaining.stream().filter(Resolvable::isConcludable))
                         .map(Resolvable::asConcludable);
                 if (concludable.isPresent()) {

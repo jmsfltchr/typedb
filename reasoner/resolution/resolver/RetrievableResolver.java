@@ -27,7 +27,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.RequestStatesTracker.ExplorationState;
+import grakn.core.reasoner.resolution.framework.Resolver.SubsumptionTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.TraversalEngine;
@@ -46,7 +46,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RequestState> requestStates;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, RequestStatesTracker<ConceptMap>> requestStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, SubsumptionTracker<ConceptMap>> requestStatesTrackers;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean explanations) {
@@ -109,8 +109,8 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        requestStatesTrackers.putIfAbsent(root, new RequestStatesTracker<>(iteration, new ConceptMapSubsumption()));
-        ExplorationState<ConceptMap> exploration = requestStatesTrackers.get(root).getOrCreateExplorationState(answerFromUpstream, false);
+        requestStatesTrackers.putIfAbsent(root, new SubsumptionTracker<>(iteration, new ConceptMapSubsumption()));
+        AnswerCache<ConceptMap> exploration = requestStatesTrackers.get(root).getOrCreateAnswerCache(answerFromUpstream, false);
         exploration.recordNewAnswers(traversal);
         return new RequestState(fromUpstream, exploration, iteration);
     }
@@ -124,7 +124,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class ConceptMapSubsumption extends RequestStatesTracker.Subsumption<ConceptMap> {
+    private static class ConceptMapSubsumption extends SubsumptionTracker.Subsumption<ConceptMap> {
 
         @Override
         protected boolean containsAll(ConceptMap conceptMap, ConceptMap contained) {
@@ -134,14 +134,14 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
-        public RequestState(Request fromUpstream, ExplorationState<ConceptMap> explorationState, int iteration) {
+        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> explorationState, int iteration) {
             super(fromUpstream, explorationState, iteration);
         }
 
         @Override
         protected Optional<Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Filtered filtered = fromUpstream.partialAnswer().asFiltered();
-            if (explorationState.requiresReiteration())
+            if (answerCache.requiresReiteration())
                 filtered.requiresReiteration(true);
             return Optional.of(filtered.aggregateToUpstream(conceptMap));
         }
@@ -153,7 +153,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
         @Override
         protected Optional<ConceptMap> next() {
-            return explorationState.next(pointer, false);
+            return answerCache.next(pointer, false);
         }
     }
 }

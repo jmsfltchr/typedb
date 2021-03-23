@@ -33,7 +33,7 @@ import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
-import grakn.core.reasoner.resolution.framework.Resolver.RequestStatesTracker.ExplorationState;
+import grakn.core.reasoner.resolution.framework.Resolver.SubsumptionTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -51,12 +52,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import java.util.BitSet;
-import java.util.TreeSet;
-
-import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
 import static grakn.core.common.iterator.Iterators.iterate;
@@ -220,13 +218,13 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected abstract static class CachingRequestState<ANSWER> extends RequestState {
 
         protected final Request fromUpstream;
-        protected final ExplorationState<ANSWER> explorationState;
+        protected final AnswerCache<ANSWER> answerCache;
         protected int pointer;
 
-        public CachingRequestState(Request fromUpstream, ExplorationState<ANSWER> explorationState, int iteration) {
+        public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
-            this.explorationState = explorationState;
+            this.answerCache = answerCache;
             this.pointer = 0;
         }
 
@@ -254,73 +252,23 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         protected abstract Optional<ANSWER> next();
 
         public boolean exhausted() {
-            return explorationState.exhausted();
+            return answerCache.exhausted();
         }
     }
 
-    public class PowerSet<E> implements Iterator<Set<E>>,Iterable<Set<E>>{
-        private E[] arr = null;
-        private BitSet bset = null;
-
-        @SuppressWarnings("unchecked")
-        public PowerSet(Set<E> set)
-        {
-            arr = (E[])set.toArray();
-            bset = new BitSet(arr.length + 1);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return !bset.get(arr.length);
-        }
-
-        @Override
-        public Set<E> next() {
-            Set<E> returnSet = new TreeSet<E>();
-            for(int i = 0; i < arr.length; i++)
-            {
-                if(bset.get(i))
-                    returnSet.add(arr[i]);
-            }
-            //increment bset
-            for(int i = 0; i < bset.size(); i++)
-            {
-                if(!bset.get(i))
-                {
-                    bset.set(i);
-                    break;
-                }else
-                    bset.clear(i);
-            }
-
-            return returnSet;
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("Not Supported!");
-        }
-
-        @Override
-        public Iterator<Set<E>> iterator() {
-            return this;
-        }
-
-    }
-
-    public static class RequestStatesTracker<ANSWER> {
-        HashMap<ConceptMap, ExplorationState<ANSWER>> exploredRequestStates;
+    public static class SubsumptionTracker<ANSWER> {
+        HashMap<ConceptMap, AnswerCache<ANSWER>> answerCaches;
         private int iteration;
         private final Subsumption<ANSWER> subsumption;
 
-        public RequestStatesTracker(int iteration, Subsumption<ANSWER> subsumption) {
+        public SubsumptionTracker(int iteration, Subsumption<ANSWER> subsumption) {
             this.iteration = iteration;
             this.subsumption = subsumption;
-            this.exploredRequestStates = new HashMap<>();
+            this.answerCaches = new HashMap<>();
         }
 
         public boolean isTracked(ConceptMap conceptMap) {
-            return exploredRequestStates.containsKey(conceptMap);
+            return answerCaches.containsKey(conceptMap);
         }
 
         public int iteration() {
@@ -330,39 +278,36 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         public void nextIteration(int newIteration) {
             assert newIteration > iteration;
             iteration = newIteration;
-            exploredRequestStates = new HashMap<>();
+            answerCaches = new HashMap<>();
         }
 
-        public ExplorationState<ANSWER> getOrCreateExplorationState(ConceptMap fromUpstream, boolean registerSubsumers) {
-            if (!exploredRequestStates.containsKey(fromUpstream)) {
-                ExplorationState<ANSWER> newExploration = new ExplorationState<>(fromUpstream, subsumption);
-                if (registerSubsumers) getSubsumingStates(fromUpstream).forEach(newExploration::registerSubsumption);
-                exploredRequestStates.put(fromUpstream, newExploration);
+        public AnswerCache<ANSWER> getOrCreateAnswerCache(ConceptMap fromUpstream, boolean registerSubsumers) {
+            if (!answerCaches.containsKey(fromUpstream)) {
+                AnswerCache<ANSWER> newCache = new AnswerCache<>(fromUpstream, subsumption);
+                if (registerSubsumers) getSubsumingCaches(fromUpstream).forEach(newCache::registerSubsumption);
+                answerCaches.put(fromUpstream, newCache);
             }
-            return exploredRequestStates.get(fromUpstream);
+            return answerCaches.get(fromUpstream);
         }
 
-        private Set<ExplorationState<ANSWER>> getSubsumingStates(ConceptMap fromUpstream) {
-            Set<ExplorationState<ANSWER>> subsumingStates = new HashSet<>();
+        private Set<AnswerCache<ANSWER>> getSubsumingCaches(ConceptMap fromUpstream) {
+            Set<AnswerCache<ANSWER>> subsumingStates = new HashSet<>();
             powerSet(fromUpstream.concepts().entrySet()).forEach(s -> {
                 HashMap<Retrievable, Concept> map = new HashMap<>();
                 s.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
                 ConceptMap conceptMapSubSet = new ConceptMap(map);
-                ExplorationState<ANSWER> subsumingState;
-                if (exploredRequestStates.containsKey(conceptMapSubSet)) {
-                    subsumingState = exploredRequestStates.get(conceptMapSubSet);
+                AnswerCache<ANSWER> subsumingState;
+                if (answerCaches.containsKey(conceptMapSubSet)) {
+                    subsumingState = answerCaches.get(conceptMapSubSet);
                 } else {
-                    subsumingState = new ExplorationState<>(conceptMapSubSet, subsumption);
+                    subsumingState = new AnswerCache<>(conceptMapSubSet, subsumption);
                 }
                 subsumingStates.add(subsumingState);
             });
             return subsumingStates;
         }
 
-        /**
-         * Power set implementation, but omitting the trivial empty set
-         */
-        public static <T> Set<Set<T>> powerSet(Set<T> set) {
+        private static <T> Set<Set<T>> powerSet(Set<T> set) {
             Set<Set<T>> powerSet = new HashSet<>();
             powerSet.add(set);
             set.forEach(el -> {
@@ -377,11 +322,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             protected abstract boolean containsAll(ANSWER answer, ConceptMap contained);
         }
 
-        public static class ExplorationState<ANSWER> {
+        public static class AnswerCache<ANSWER> {
 
             private final List<ANSWER> answers;
             private final Set<ANSWER> answersSet;
-            private final Set<ExplorationState<ANSWER>> subsumingExplorations;
+            private final Set<AnswerCache<ANSWER>> subsumingCaches;
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
             private FunctionalIterator<ANSWER> traversal;
@@ -389,7 +334,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private final ConceptMap state;
             private final Subsumption<ANSWER> subsumption;
 
-            private ExplorationState(ConceptMap state, Subsumption<ANSWER> subsumption) {
+            private AnswerCache(ConceptMap state, Subsumption<ANSWER> subsumption) {
                 this.state = state;
                 this.subsumption = subsumption;
                 this.traversal = Iterators.empty();
@@ -398,7 +343,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.retrievedFromIncomplete = false;
                 this.requiresReiteration = false;
                 this.exhausted = false;
-                this.subsumingExplorations = new HashSet<>();
+                this.subsumingCaches = new HashSet<>();
             }
 
             public void recordNewAnswer(ANSWER newAnswer) {
@@ -427,7 +372,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
             public boolean exhausted() {
                 if (exhausted) return true;
-                for (ExplorationState<ANSWER> e : subsumingExplorations) {
+                for (AnswerCache<ANSWER> e : subsumingCaches) {
                     if (e.exhausted()) {
                         setExhaustiveAnswers(answers);
                         return true;
@@ -436,8 +381,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 return false;
             }
 
-            public void registerSubsumption(ExplorationState<ANSWER> newExploration) {
-                subsumingExplorations.add(newExploration);
+            private void registerSubsumption(AnswerCache<ANSWER> newCache) {
+                subsumingCaches.add(newCache);
             }
 
             public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {

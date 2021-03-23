@@ -96,12 +96,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
         assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
-
-        FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
-                .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
-        if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
-
-        requestState.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+        if (!requestState.exhausted()) {
+            FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
+                    .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
+            if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
+            requestState.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+        }
         nextAnswer(fromUpstream, requestState, iteration);
     }
 

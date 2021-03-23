@@ -176,7 +176,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache;
-        if (tracker.isTracked(answerFromUpstream)) {
+        boolean isTracked = tracker.isTracked(answerFromUpstream);
+        if (isTracked) {
             answerCache = tracker.getAnswerCache(answerFromUpstream);
         } else {
             answerCache = tracker.createAnswerCache(answerFromUpstream, true);
@@ -185,16 +186,19 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
-        assert conclusion.retrievableIds().containsAll(partialAnswer.concepts().keySet());
-        if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.concepts().size() &&
-                partialAnswer.concepts().containsKey(conclusion.generating().get().id())) {
-            FunctionalIterator<Partial.Filtered> completedAnswers = candidateAnswers(fromUpstream, partialAnswer);
-            completedAnswers.forEachRemaining(answer -> requestState.downstreamManager()
-                    .addDownstream(Request.create(driver(), ruleResolver, answer)));
-        } else {
-            Set<Identifier.Variable.Retrievable> named = iterate(conclusion.retrievableIds()).filter(Identifier::isName).toSet();
-            Partial.Filtered downstreamAnswer = fromUpstream.partialAnswer().filterToDownstream(named, ruleResolver);
-            requestState.downstreamManager().addDownstream(Request.create(driver(), ruleResolver, downstreamAnswer));
+        if (!isTracked) {
+            // TODO: This implies having exploration and tracking states as separate objects
+            assert conclusion.retrievableIds().containsAll(partialAnswer.concepts().keySet());
+            if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.concepts().size() &&
+                    partialAnswer.concepts().containsKey(conclusion.generating().get().id())) {
+                FunctionalIterator<Partial.Filtered> completedAnswers = candidateAnswers(fromUpstream, partialAnswer);
+                completedAnswers.forEachRemaining(answer -> requestState.downstreamManager()
+                        .addDownstream(Request.create(driver(), ruleResolver, answer)));
+            } else {
+                Set<Identifier.Variable.Retrievable> named = iterate(conclusion.retrievableIds()).filter(Identifier::isName).toSet();
+                Partial.Filtered downstreamAnswer = fromUpstream.partialAnswer().filterToDownstream(named, ruleResolver);
+                requestState.downstreamManager().addDownstream(Request.create(driver(), ruleResolver, downstreamAnswer));
+            }
         }
 
         return requestState;

@@ -280,10 +280,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private static class ConceptMapSubsumption extends CacheTracker.Subsumption<ConceptMap> {
+    private static class ConceptMapSubsumption extends CacheTracker.SubsumptionOperation<ConceptMap> {
 
         @Override
-        protected boolean containsAll(ConceptMap conceptMap, ConceptMap contained) {
+        protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
             return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
         }
     }

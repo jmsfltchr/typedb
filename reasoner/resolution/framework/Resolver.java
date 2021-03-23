@@ -257,9 +257,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     public static class CacheTracker<ANSWER> {
         HashMap<ConceptMap, AnswerCache<ANSWER>> answerCaches;
         private int iteration;
-        private final Subsumption<ANSWER> subsumption;
+        private final SubsumptionOperation<ANSWER> subsumption;
 
-        public CacheTracker(int iteration, Subsumption<ANSWER> subsumption) {
+        public CacheTracker(int iteration, SubsumptionOperation<ANSWER> subsumption) {
             this.iteration = iteration;
             this.subsumption = subsumption;
             this.answerCaches = new HashMap<>();
@@ -282,7 +282,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         public AnswerCache<ANSWER> getOrCreateAnswerCache(ConceptMap fromUpstream, boolean registerSubsumers) {
             if (!answerCaches.containsKey(fromUpstream)) {
                 AnswerCache<ANSWER> newCache = new AnswerCache<>(fromUpstream, subsumption);
-                if (registerSubsumers) getSubsumingCaches(fromUpstream).forEach(s -> newCache.subsumption().register(s));
+                if (registerSubsumers) getSubsumingCaches(fromUpstream).forEach(newCache::registerSubsumptiveCache);
                 answerCaches.put(fromUpstream, newCache);
             }
             return answerCaches.get(fromUpstream);
@@ -316,22 +316,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return powerSet;
         }
 
-        public static abstract class Subsumption<ANSWER> {
-            private final Set<AnswerCache<ANSWER>> subsumingCaches;
-
-            protected Subsumption() {
-                this.subsumingCaches = new HashSet<>();
-            }
-
-            protected abstract boolean containsAll(ANSWER answer, ConceptMap contained);
-
-            private void register(AnswerCache<ANSWER> newCache) {
-                subsumingCaches.add(newCache);
-            }
-
-            public Set<AnswerCache<ANSWER>> subsumingCaches() {
-                return subsumingCaches;
-            }
+        public static abstract class SubsumptionOperation<ANSWER> {
+            protected abstract boolean subsumes(ANSWER answer, ConceptMap contained);
         }
 
         public static class AnswerCache<ANSWER> {
@@ -343,9 +329,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private FunctionalIterator<ANSWER> traversal;
             private boolean exhausted;
             private final ConceptMap state;
-            private final Subsumption<ANSWER> subsumption;
+            private final SubsumptionOperation<ANSWER> subsumption;
+            private final Set<AnswerCache<ANSWER>> subsumingCaches;
 
-            private AnswerCache(ConceptMap state, Subsumption<ANSWER> subsumption) {
+            private AnswerCache(ConceptMap state, SubsumptionOperation<ANSWER> subsumption) {
                 this.state = state;
                 this.subsumption = subsumption;
                 this.traversal = Iterators.empty();
@@ -354,6 +341,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.retrievedFromIncomplete = false;
                 this.requiresReiteration = false;
                 this.exhausted = false;
+                this.subsumingCaches = new HashSet<>();
             }
 
             public void recordNewAnswer(ANSWER newAnswer) {
@@ -375,14 +363,14 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
             public void setExhaustiveAnswers(List<ANSWER> exhaustiveAnswers) {
                 this.answers.addAll(iterate(exhaustiveAnswers)
-                                            .filter(e -> !subsumption.containsAll(e, state))
+                                            .filter(e -> !subsumption.subsumes(e, state))
                                             .filter(e -> !answersSet.contains(e)).toList());
                 setExhausted();
             }
 
             public boolean exhausted() {
                 if (exhausted) return true;
-                for (AnswerCache<ANSWER> e : subsumption.subsumingCaches()) {
+                for (AnswerCache<ANSWER> e : subsumingCaches) {
                     if (e.exhausted()) {
                         setExhaustiveAnswers(answers);
                         return true;
@@ -391,8 +379,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 return false;
             }
 
-            private Subsumption<ANSWER> subsumption() {
-                return subsumption;
+            private void registerSubsumptiveCache(AnswerCache<ANSWER> subsumingCache) {
+                subsumingCaches.add(subsumingCache);
             }
 
             public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {

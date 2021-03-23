@@ -207,10 +207,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         return name() + ": then " + conclusion.rule().then();
     }
 
-    private static class FullMapSubsumption extends CacheTracker.Subsumption<Map<Identifier.Variable, Concept>> {
+    private static class FullMapSubsumption extends CacheTracker.SubsumptionOperation<Map<Identifier.Variable, Concept>> {
 
         @Override
-        protected boolean containsAll(Map<Identifier.Variable, Concept> map, ConceptMap contained) {
+        protected boolean subsumes(Map<Identifier.Variable, Concept> map, ConceptMap contained) {
             return map.entrySet().containsAll(contained.concepts().entrySet());
         }
     }

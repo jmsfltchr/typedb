@@ -148,6 +148,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         } else if (!requestState.exhausted() && requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
+            requestState.setExhausted();
             failToUpstream(fromUpstream, iteration);
         }
     }
@@ -186,8 +187,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
-        if (!isTracked) {
-            // TODO: This implies having exploration and tracking states as separate objects
+        if (!requestState.exhausted()) {
             assert conclusion.retrievableIds().containsAll(partialAnswer.concepts().keySet());
             if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.concepts().size() &&
                     partialAnswer.concepts().containsKey(conclusion.generating().get().id())) {
@@ -200,7 +200,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                 requestState.downstreamManager().addDownstream(Request.create(driver(), ruleResolver, downstreamAnswer));
             }
         }
-
         return requestState;
     }
 

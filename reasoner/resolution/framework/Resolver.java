@@ -252,6 +252,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         public boolean exhausted() {
             return answerCache.exhausted();
         }
+
+        public void setExhausted() {
+            answerCache.setExhausted();
+        }
     }
 
     public static class CacheTracker<ANSWER> {

@@ -175,7 +175,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         CacheTracker<Map<Identifier.Variable, Concept>> tracker = cacheTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        AnswerCache answerCache = tracker.createAnswerCache(answerFromUpstream, true);
+        CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache;
+        if (tracker.isTracked(answerFromUpstream)) {
+            answerCache = tracker.getAnswerCache(answerFromUpstream);
+        } else {
+            answerCache = tracker.createAnswerCache(answerFromUpstream, true);
+        }
         RequestState requestState = new RequestState(fromUpstream, answerCache, iteration);
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
@@ -184,8 +189,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.concepts().size() &&
                 partialAnswer.concepts().containsKey(conclusion.generating().get().id())) {
             FunctionalIterator<Partial.Filtered> completedAnswers = candidateAnswers(fromUpstream, partialAnswer);
-            completedAnswers.forEachRemaining(answer -> requestState.downstreamManager().addDownstream(Request.create(driver(), ruleResolver,
-                                                                                                  answer)));
+            completedAnswers.forEachRemaining(answer -> requestState.downstreamManager()
+                    .addDownstream(Request.create(driver(), ruleResolver, answer)));
         } else {
             Set<Identifier.Variable.Retrievable> named = iterate(conclusion.retrievableIds()).filter(Identifier::isName).toSet();
             Partial.Filtered downstreamAnswer = fromUpstream.partialAnswer().filterToDownstream(named, ruleResolver);
@@ -221,7 +226,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final ProducedRecorder producedRecorder;
 
 
-        public RequestState(Request fromUpstream, AnswerCache answerCache, int iteration) {
+        public RequestState(Request fromUpstream, CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder();

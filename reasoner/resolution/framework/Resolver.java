@@ -33,7 +33,6 @@ import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
-import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -217,10 +216,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected abstract static class CachingRequestState<ANSWER> extends RequestState {
 
         protected final Request fromUpstream;
-        protected final AnswerCache answerCache;
+        protected final CacheTracker<ANSWER>.AnswerCache answerCache;
         protected int pointer;
 
-        public CachingRequestState(Request fromUpstream, AnswerCache answerCache, int iteration) {
+        public CachingRequestState(Request fromUpstream, CacheTracker<ANSWER>.AnswerCache answerCache, int iteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
             this.answerCache = answerCache;

@@ -27,7 +27,6 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.TraversalEngine;
@@ -107,11 +106,17 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         LOG.debug("{}: Creating a new ResponseProducer for iteration:{}, request: {}", name(), iteration, fromUpstream);
         assert fromUpstream.partialAnswer().isFiltered();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         cacheTrackers.putIfAbsent(root, new CacheTracker<>(iteration, new ConceptMapSubsumption()));
-        AnswerCache answerCache = cacheTrackers.get(root).createAnswerCache(answerFromUpstream, false);
-        answerCache.recordNewAnswers(traversal);
+        CacheTracker<ConceptMap> tracker = cacheTrackers.get(root);
+        CacheTracker<ConceptMap>.AnswerCache answerCache;
+        if (tracker.isTracked(answerFromUpstream)) {
+            answerCache = tracker.getAnswerCache(answerFromUpstream);
+        } else {
+            answerCache = tracker.createAnswerCache(answerFromUpstream, false);
+            FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
+            answerCache.recordNewAnswers(traversal);
+        }
         return new RequestState(fromUpstream, answerCache, iteration);
     }
 
@@ -134,7 +139,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
-        public RequestState(Request fromUpstream, AnswerCache answerCache, int iteration) {
+        public RequestState(Request fromUpstream, CacheTracker<ConceptMap>.AnswerCache answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
         }
 

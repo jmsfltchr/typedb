@@ -29,7 +29,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.SubsumptionTracker.AnswerCache;
+import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -54,7 +54,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private final Map<Request, RequestState> requestStates;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, SubsumptionTracker<Map<Identifier.Variable, Concept>>> requestStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheTracker<Map<Identifier.Variable, Concept>>> cacheTrackers;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               Driver<ResolutionRecorder> resolutionRecorder, TraversalEngine traversalEngine,
@@ -65,7 +65,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         this.resolutionRecorder = resolutionRecorder;
         this.requestStates = new HashMap<>();
         this.isInitialised = false;
-        this.requestStatesTrackers = new HashMap<>();
+        this.cacheTrackers = new HashMap<>();
     }
 
     @Override
@@ -95,7 +95,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         RequestState requestState = this.requestStates.get(fromUpstream);
         fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
-        assert requestStatesTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
+        assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
 
         FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                 .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
@@ -171,12 +171,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private RequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        requestStatesTrackers.putIfAbsent(root, new SubsumptionTracker<>(iteration, new FullMapSubsumption()));
-        SubsumptionTracker<Map<Identifier.Variable, Concept>> tracker = requestStatesTrackers.get(root);
+        cacheTrackers.putIfAbsent(root, new CacheTracker<>(iteration, new FullMapSubsumption()));
+        CacheTracker<Map<Identifier.Variable, Concept>> tracker = cacheTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        AnswerCache<Map<Identifier.Variable, Concept>> exploration = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
-        RequestState requestState = new RequestState(fromUpstream, exploration, iteration);
+        AnswerCache<Map<Identifier.Variable, Concept>> answerCache = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
+        RequestState requestState = new RequestState(fromUpstream, answerCache, iteration);
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
@@ -207,7 +207,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         return name() + ": then " + conclusion.rule().then();
     }
 
-    private static class FullMapSubsumption extends SubsumptionTracker.Subsumption<Map<Identifier.Variable, Concept>> {
+    private static class FullMapSubsumption extends CacheTracker.Subsumption<Map<Identifier.Variable, Concept>> {
 
         @Override
         protected boolean containsAll(Map<Identifier.Variable, Concept> map, ConceptMap contained) {
@@ -221,8 +221,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final ProducedRecorder producedRecorder;
 
 
-        public RequestState(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>> explorationState, int iteration) {
-            super(fromUpstream, explorationState, iteration);
+        public RequestState(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>> answerCache, int iteration) {
+            super(fromUpstream, answerCache, iteration);
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder();
         }

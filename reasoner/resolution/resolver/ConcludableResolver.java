@@ -33,7 +33,7 @@ import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial.Unified;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.SubsumptionTracker.AnswerCache;
+import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.TraversalEngine;
@@ -63,7 +63,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final Map<Request, RequestState> requestStates;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, SubsumptionTracker<ConceptMap>> requestStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheTracker<ConceptMap>> cacheTrackers;
 
     public ConcludableResolver(Driver<ConcludableResolver> driver, Concludable concludable,
                                Driver<ResolutionRecorder> resolutionRecorder, ResolverRegistry registry,
@@ -79,7 +79,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         this.requestStates = new HashMap<>();
         this.unboundVars = unboundVars(concludable.pattern());
         this.isInitialised = false;
-        this.requestStatesTrackers = new HashMap<>();
+        this.cacheTrackers = new HashMap<>();
     }
 
     @Override
@@ -107,7 +107,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         Request fromUpstream = fromUpstream(toDownstream);
         RequestState requestState = this.requestStates.get(fromUpstream);
 
-        assert requestStatesTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
+        assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
         assert requestState.isExploration();
         requestState.asExploration().newAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
 
@@ -221,8 +221,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             recursionState.nextIteration(iteration);
         }
 
-        requestStatesTrackers.putIfAbsent(root, new SubsumptionTracker<>(iteration, new ConceptMapSubsumption()));
-        SubsumptionTracker<ConceptMap> tracker = requestStatesTrackers.get(root);
+        cacheTrackers.putIfAbsent(root, new CacheTracker<>(iteration, new ConceptMapSubsumption()));
+        CacheTracker<ConceptMap> tracker = cacheTrackers.get(root);
         if (tracker.iteration() < iteration) {
             tracker.nextIteration(iteration);
         }
@@ -230,22 +230,22 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
         if (tracker.isTracked(answerFromUpstream)) {
-            AnswerCache<ConceptMap> exploration = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
-            return new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
+            AnswerCache<ConceptMap> answerCache = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
+            return new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
         } else {
             assert fromUpstream.partialAnswer().isMapped();
-            AnswerCache<ConceptMap> exploration = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
-            if (!exploration.exhausted()) {
+            AnswerCache<ConceptMap> answerCache = tracker.getOrCreateAnswerCache(answerFromUpstream, true);
+            if (!answerCache.exhausted()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
-                exploration.recordNewAnswers(traversal);
+                answerCache.recordNewAnswers(traversal);
             }
             RequestState requestState;
             if (!recursionState.hasReceived(answerFromUpstream)) {
                 recursionState.recordReceived(answerFromUpstream);
-                requestState = new RuleExplorationRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
+                requestState = new RuleExplorationRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
                 registerRules(fromUpstream, requestState.asExploration());
             } else {
-                requestState = new RetrievalRequestState(fromUpstream, exploration, iteration, singleAnswerRequired);
+                requestState = new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
             }
             return requestState;
         }
@@ -280,7 +280,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private static class ConceptMapSubsumption extends SubsumptionTracker.Subsumption<ConceptMap> {
+    private static class ConceptMapSubsumption extends CacheTracker.Subsumption<ConceptMap> {
 
         @Override
         protected boolean containsAll(ConceptMap conceptMap, ConceptMap contained) {
@@ -293,8 +293,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         private final ProducedRecorder producedRecorder;
         private final boolean singleAnswerRequired;
 
-        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> explorationState, int iteration, boolean singleAnswerRequired) {
-            super(fromUpstream, explorationState, iteration);
+        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration, boolean singleAnswerRequired) {
+            super(fromUpstream, answerCache, iteration);
             this.singleAnswerRequired = singleAnswerRequired;
             this.producedRecorder = new ProducedRecorder();
         }
@@ -341,8 +341,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         private final DownstreamManager downstreamManager;
 
-        public RuleExplorationRequestState(Request fromUpstream, AnswerCache<ConceptMap> explorationState, int iteration, boolean singleAnswerRequired) {
-            super(fromUpstream, explorationState, iteration, singleAnswerRequired);
+        public RuleExplorationRequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration, boolean singleAnswerRequired) {
+            super(fromUpstream, answerCache, iteration, singleAnswerRequired);
             this.downstreamManager = new DownstreamManager();
         }
 
@@ -373,8 +373,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     private static class RetrievalRequestState extends RequestState {
 
-        public RetrievalRequestState(Request fromUpstream, AnswerCache<ConceptMap> explorationState, int iteration, boolean singleAnswerRequired) {
-            super(fromUpstream, explorationState, iteration, singleAnswerRequired);
+        public RetrievalRequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration, boolean singleAnswerRequired) {
+            super(fromUpstream, answerCache, iteration, singleAnswerRequired);
         }
 
         @Override

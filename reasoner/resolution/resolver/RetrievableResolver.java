@@ -27,7 +27,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.SubsumptionTracker.AnswerCache;
+import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.TraversalEngine;
@@ -46,7 +46,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RequestState> requestStates;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, SubsumptionTracker<ConceptMap>> requestStatesTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheTracker<ConceptMap>> cacheTrackers;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean explanations) {
@@ -54,7 +54,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
               registry, traversalEngine, conceptMgr, explanations);
         this.retrievable = retrievable;
         this.requestStates = new HashMap<>();
-        this.requestStatesTrackers = new HashMap<>();
+        this.cacheTrackers = new HashMap<>();
     }
 
     @Override
@@ -109,10 +109,10 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        requestStatesTrackers.putIfAbsent(root, new SubsumptionTracker<>(iteration, new ConceptMapSubsumption()));
-        AnswerCache<ConceptMap> exploration = requestStatesTrackers.get(root).getOrCreateAnswerCache(answerFromUpstream, false);
-        exploration.recordNewAnswers(traversal);
-        return new RequestState(fromUpstream, exploration, iteration);
+        cacheTrackers.putIfAbsent(root, new CacheTracker<>(iteration, new ConceptMapSubsumption()));
+        AnswerCache<ConceptMap> answerCache = cacheTrackers.get(root).getOrCreateAnswerCache(answerFromUpstream, false);
+        answerCache.recordNewAnswers(traversal);
+        return new RequestState(fromUpstream, answerCache, iteration);
     }
 
     private void nextAnswer(Request fromUpstream, RequestState responseProducer, int iteration) {
@@ -124,7 +124,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class ConceptMapSubsumption extends SubsumptionTracker.Subsumption<ConceptMap> {
+    private static class ConceptMapSubsumption extends CacheTracker.Subsumption<ConceptMap> {
 
         @Override
         protected boolean containsAll(ConceptMap conceptMap, ConceptMap contained) {
@@ -134,8 +134,8 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
-        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> explorationState, int iteration) {
-            super(fromUpstream, explorationState, iteration);
+        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration) {
+            super(fromUpstream, answerCache, iteration);
         }
 
         @Override

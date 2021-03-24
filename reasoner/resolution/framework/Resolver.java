@@ -368,9 +368,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             }
 
             public void setExhausted(List<ANSWER> exhaustiveAnswers) {
-                this.answers.addAll(iterate(exhaustiveAnswers)
-                                            .filter(e -> !subsumption.subsumes(e, state))
-                                            .filter(e -> !answersSet.contains(e)).toList());
+                List<ANSWER> newAnswers = iterate(exhaustiveAnswers)
+                        .filter(e -> subsumption.subsumes(e, state))
+                        .filter(e -> !answersSet.contains(e)).toList();
+                this.answers.addAll(newAnswers);
+                this.answersSet.addAll(newAnswers);
                 setExhausted();
             }
 

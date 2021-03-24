@@ -311,8 +311,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         @Override
         protected Optional<Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Mapped mapped = fromUpstream.partialAnswer().asMapped();
-            if (answerCache.requiresReiteration())
-                mapped.requiresReiteration(true);
+            if (answerCache.requiresReiteration()) mapped.requiresReiteration(true);
             return Optional.of(mapped.aggregateToUpstream(conceptMap));
         }
 

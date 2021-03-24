@@ -241,7 +241,9 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         @Override
         protected Optional<Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
-            return fromUpstream.partialAnswer().asUnified().aggregateToUpstream(answer);
+            Partial.Unified unified = fromUpstream.partialAnswer().asUnified();
+            if (answerCache.requiresReiteration()) unified.requiresReiteration();
+            return unified.aggregateToUpstream(answer);
         }
 
         @Override

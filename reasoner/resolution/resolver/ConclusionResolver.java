@@ -148,7 +148,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         } else if (!requestState.exhausted() && requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
-//            requestState.setExhausted(); // TODO: This is the cause of the missing answers in the Grabl test
+            requestState.setExhausted(); // TODO: This is the cause of the missing answers in the Grabl test
             failToUpstream(fromUpstream, iteration);
         }
     }

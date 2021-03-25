@@ -33,7 +33,6 @@ import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial.Unified;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.TraversalEngine;
@@ -182,11 +181,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             answerFound(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
             RuleExplorationRequestState exploration;
-            if (requestState.isExploration() && !requestState.exhausted()) {
+            if (requestState.isExploration() && !requestState.cacheComplete()) {
                 if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
                     requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
                 } else {
-                    requestState.setExhausted();
+                    requestState.setCacheComplete();
                     failToUpstream(fromUpstream, iteration);
                 }
             } else {

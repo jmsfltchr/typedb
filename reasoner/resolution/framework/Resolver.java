@@ -227,18 +227,16 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         public Optional<Partial<?>> nextAnswer() {
-            boolean endOfAnswers = false;
             Optional<Partial<?>> upstreamAnswer = Optional.empty();
-            while (!endOfAnswers) {
+            while (true) {
                 Optional<ANSWER> answer = next();
                 if (answer.isPresent()) {
                     pointer++;
-                    upstreamAnswer = toUpstream(answer.get());
+                    upstreamAnswer = toUpstream(answer.get()).filter(partial -> !isDuplicate(partial.conceptMap()));
+                    if (upstreamAnswer.isPresent()) break;
                 } else {
-                    endOfAnswers = true;
+                    break;
                 }
-                upstreamAnswer = upstreamAnswer.filter(partial -> !isDuplicate(partial.conceptMap()));
-                if (upstreamAnswer.isPresent()) break;
             }
             return upstreamAnswer;
         }
@@ -249,11 +247,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected abstract Optional<ANSWER> next();
 
-        public boolean exhausted() {
+        public boolean cacheComplete() {
             return answerCache.exhausted();
         }
 
-        public void setExhausted() {
+        public void setCacheComplete() {
             answerCache.setExhausted();
         }
     }

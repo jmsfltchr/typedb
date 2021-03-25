@@ -125,7 +125,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
-            requestStates.get(fromUpstream).setExhausted();
+            requestStates.get(fromUpstream).setCacheComplete();
             failToUpstream(fromUpstream, iteration);
         }
     }

@@ -29,7 +29,6 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import grakn.core.reasoner.resolution.framework.Resolver.CacheTracker.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -96,7 +95,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
         assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
-        if (!requestState.exhausted()) {
+        if (!requestState.cacheComplete()) {
             FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                     .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
             if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
@@ -145,10 +144,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Optional<Partial<?>> upstreamAnswer = requestState.nextAnswer();
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
-        } else if (!requestState.exhausted() && requestState.downstreamManager().hasDownstream()) {
+        } else if (!requestState.cacheComplete() && requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
-            requestState.setExhausted(); // TODO: This is the cause of the missing answers in the Grabl test
+            requestState.setCacheComplete(); // TODO: This is the cause of the missing answers in the Grabl test
             failToUpstream(fromUpstream, iteration);
         }
     }
@@ -187,7 +186,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         ConceptMap partialAnswer = fromUpstream.partialAnswer().conceptMap();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
-        if (!requestState.exhausted()) {
+        if (!requestState.cacheComplete()) {
             assert conclusion.retrievableIds().containsAll(partialAnswer.concepts().keySet());
             if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.concepts().size() &&
                     partialAnswer.concepts().containsKey(conclusion.generating().get().id())) {

@@ -30,12 +30,9 @@ host_compatible_java_test(
     ],
     deps = [
         # Internal dependencies
-        "//test/integration/util:util",
         "//common:common",
-        "//concurrent:concurrent",
 
         # External dependencies from Grakn Labs
-        "@graknlabs_common//:common",
         "@graknlabs_graql//java:graql",
     ],
     data = ["resolution/data"],

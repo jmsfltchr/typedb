@@ -147,7 +147,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         } else if (!requestState.cacheComplete() && requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
-            requestState.setCacheComplete(); // TODO: This is the cause of the missing answers in the Grabl test
+            // requestState.setCacheComplete(); // TODO: Reinstate once Conclusion caching works in recursive settings
             failToUpstream(fromUpstream, iteration);
         }
     }
@@ -258,6 +258,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         @Override
         protected Optional<Map<Identifier.Variable, Concept>> next() {
             return answerCache.next(pointer, true);
+        }
+
+        @Override
+        public boolean cacheComplete() {
+            // TODO: Remove this method in favour of the parent's once Conclusion caching works in recursive settings
+            return false;
         }
     }
 }

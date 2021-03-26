@@ -185,7 +185,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
                     requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
                 } else {
-                    requestState.setCacheComplete();
+                    requestState.setCacheComplete(); // TODO: The cache should not be set as complete during recursion
                     failToUpstream(fromUpstream, iteration);
                 }
             } else {

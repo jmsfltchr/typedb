@@ -237,19 +237,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         } else {
             assert fromUpstream.partialAnswer().isMapped();
             CacheTracker<ConceptMap>.AnswerCache answerCache = tracker.createAnswerCache(answerFromUpstream, true);
-            if (!answerCache.exhausted()) {
-                FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
-                answerCache.recordNewAnswers(traversal);
-            }
-            RequestState requestState;
-            if (!recursionState.hasReceived(answerFromUpstream)) {
-                recursionState.recordReceived(fromUpstream);
-                requestState = new RuleExplorationRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
-                registerRules(fromUpstream, requestState.asExploration());
-            } else {
-                requestState = new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
-//                requestState.asRetrieval().setRequiresReiteration();
-            }
+            FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
+            answerCache.recordNewAnswers(traversal);
+            recursionState.recordReceived(fromUpstream);
+            RequestState requestState = new RuleExplorationRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired);
+            registerRules(fromUpstream, requestState.asExploration());
             return requestState;
         }
     }

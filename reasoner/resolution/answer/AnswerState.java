@@ -47,6 +47,8 @@ public interface AnswerState {
 
     boolean requiresReiteration();
 
+    void requiresReiteration(boolean requiresReiteration);
+
     Actor.Driver<? extends Resolver<?>> root();
 
     default boolean isTop() { return false; }
@@ -146,8 +148,6 @@ public interface AnswerState {
     interface Partial<PARENT extends AnswerState> extends AnswerState {
 
         PARENT parent();
-
-        void requiresReiteration(boolean requiresReiteration);
 
         @Override
         default boolean isPartial() { return true; }
@@ -387,6 +387,8 @@ public interface AnswerState {
             Optional<? extends PRNT> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
 
             SLF extend(ConceptMap ans);
+
+            Compound<?, SLF> toDownstream(Set<Identifier.Variable.Retrievable> filter);
 
             @Override
             default boolean isConclusion() { return true; }

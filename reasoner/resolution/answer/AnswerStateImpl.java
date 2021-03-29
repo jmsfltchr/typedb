@@ -44,7 +44,7 @@ public abstract class AnswerStateImpl implements AnswerState {
 
     private final Actor.Driver<? extends Resolver<?>> root;
     private final ConceptMap conceptMap;
-    private final boolean requiresReiteration;
+    private boolean requiresReiteration;
 
     AnswerStateImpl(ConceptMap conceptMap, Actor.Driver<? extends Resolver<?>> root, boolean requiresReiteration) {
         this.conceptMap = conceptMap;
@@ -60,6 +60,11 @@ public abstract class AnswerStateImpl implements AnswerState {
     @Override
     public boolean requiresReiteration() {
         return requiresReiteration;
+    }
+
+    @Override
+    public void requiresReiteration(boolean requiresReiteration) {
+        this.requiresReiteration = requiresReiteration;
     }
 
     @Override

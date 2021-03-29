@@ -119,8 +119,8 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         requestState.downstreamManager().addDownstream(downstreamRequest);
         requestFromDownstream(downstreamRequest, fromUpstream, iteration);
         // negated requests can be used twice in a parallel setting, and return the same answer twice
-        if (!nextResolvable.isNegated() || (nextResolvable.isNegated() && !requestState.containsDownstream(downstreamRequest))) {
-            requestState.addDownstreamProducer(downstreamRequest);
+        if (!nextResolvable.isNegated() || (nextResolvable.isNegated() && !requestState.downstreamManager().contains(downstreamRequest))) {
+            requestState.downstreamManager().addDownstream(downstreamRequest);
         }
     }
 
@@ -131,7 +131,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        RequestState requestState = this.requestStates.get(fromUpstream);
+        CompoundResolver.RequestState requestState = this.requestStates.get(fromUpstream);
 
         if (iteration < requestState.iteration()) {
             // short circuit old iteration failed messages to upstream
@@ -238,10 +238,6 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
         public Set<ConceptMap> produced() {
             return produced;
-        }
-
-        public boolean containsDownstream(Request downstream) {
-            return downstreamProducer.contains(downstream);
         }
     }
 

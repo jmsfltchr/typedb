@@ -388,11 +388,6 @@ public interface AnswerState {
 
             SLF extend(ConceptMap ans);
 
-            public Optional<Partial<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
-                Optional<ConceptMap> unUnified = unifier.unUnify(concepts, instanceRequirements);
-                return unUnified.map(ans -> parent().with(ans, true, resolvedBy(), this));
-            }
-
             @Override
             default boolean isConclusion() { return true; }
 

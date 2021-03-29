@@ -126,9 +126,9 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-            RequestState requestState = requestStates.get(fromUpstream);
-            if (!requestState.hasProduced(upstreamAnswer.conceptMap())) {
-                requestState.recordProduced(upstreamAnswer.conceptMap());
+            CompoundResolver.RequestState requestState = requestStates.get(fromUpstream);
+            if (!requestState.producedRecorder().hasProduced(upstreamAnswer.conceptMap())) {
+                requestState.producedRecorder().produced(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {

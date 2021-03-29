@@ -490,5 +490,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             downstreams.clear();
             downstreamSelector = Iterators.empty();
         }
+
+        public boolean contains(Request downstreamRequest) {
+            return downstreams.contains(downstreamRequest);
+        }
     }
 }

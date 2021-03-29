@@ -238,7 +238,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         @Override
         protected Optional<Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
             Partial.Conclusion<?, ?> conclusion = fromUpstream.partialAnswer().asConclusion();
-            if (answerCache.requiresReiteration()) conclusion.requiresReiteration();
+            if (answerCache.requiresReiteration()) conclusion.requiresReiteration(true);
             return conclusion.aggregateToUpstream(answer);
         }
 

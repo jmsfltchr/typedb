@@ -303,7 +303,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         @Override
-        protected Optional<Partial<?>> toUpstream(ConceptMap conceptMap) {
+        protected Optional<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable.Match<?> partial = fromUpstream.partialAnswer().asConcludable().asMatch();
             if (answerCache.requiresReiteration()) partial.requiresReiteration(true);
             return Optional.of(partial.toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap)));

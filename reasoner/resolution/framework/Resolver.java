@@ -211,7 +211,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected RequestState(int iteration) {this.iteration = iteration;}
 
-        public abstract Optional<Partial<?>> nextAnswer();
+        public abstract Optional<? extends Partial<?>> nextAnswer();
 
         public int iteration() {
             return iteration;
@@ -231,8 +231,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.pointer = 0;
         }
 
-        public Optional<Partial<?>> nextAnswer() {
-            Optional<Partial<?>> upstreamAnswer = Optional.empty();
+        public Optional<? extends Partial<?>> nextAnswer() {
+            Optional<? extends Partial<?>> upstreamAnswer = Optional.empty();
             while (true) {
                 Optional<ANSWER> answer = next();
                 if (answer.isPresent()) {
@@ -246,7 +246,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return upstreamAnswer;
         }
 
-        protected abstract Optional<Partial<?>> toUpstream(ANSWER conceptMap);
+        protected abstract Optional<? extends Partial<?>> toUpstream(ANSWER conceptMap);
 
         protected abstract boolean isDuplicate(ConceptMap conceptMap);
 

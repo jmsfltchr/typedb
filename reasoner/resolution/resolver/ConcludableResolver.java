@@ -108,7 +108,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert requestState.isExploration();
         requestState.asExploration().newAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
 
-        if (fromDownstream.answer().isExplain()) {
+        if (fromDownstream.answer().asCompound().isExplain()) {
             // TODO: Skip the cache and call answerFound() immediately
         } else if (iteration == requestState.iteration()) {
             nextAnswer(fromUpstream, requestState, iteration);
@@ -177,7 +177,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        Optional<Partial.Compound<?, ?>> upstreamAnswer = requestState.nextAnswer();
+        Optional<Partial.Compound<?, ?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asCompound);
         if (upstreamAnswer.isPresent()) {
             answerFound(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
@@ -235,7 +235,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             if (!recursionState.hasReceivedFrom(answerFromUpstream, fromUpstream)) requestState.asRetrieval().setRequiresReiteration();
             return requestState;
         } else {
-            assert fromUpstream.partialAnswer().isMapped();
+            assert fromUpstream.partialAnswer().isConcludable();
             CacheTracker<ConceptMap>.AnswerCache answerCache = tracker.createAnswerCache(answerFromUpstream, true);
             if (!answerCache.exhausted()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
@@ -304,7 +304,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected Optional<Partial<?>> toUpstream(ConceptMap conceptMap) {
-            Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable().asMatch();
+            Partial.Concludable.Match<?> partial = fromUpstream.partialAnswer().asConcludable().asMatch();
             if (answerCache.requiresReiteration()) partial.requiresReiteration(true);
             return Optional.of(partial.toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap)));
         }

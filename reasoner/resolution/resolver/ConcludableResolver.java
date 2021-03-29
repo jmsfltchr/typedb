@@ -108,8 +108,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert requestState.isExploration();
         requestState.asExploration().newAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
 
-        if (fromDownstream.answer().asCompound().isExplain()) {
-            // TODO: Skip the cache and call answerFound() immediately
+        if (fromDownstream.answer().asConcludable().isExplain()) {
+            answerFound(fromDownstream.answer().asConcludable().toUpstreamInferred(), fromUpstream, iteration);
         } else if (iteration == requestState.iteration()) {
             nextAnswer(fromUpstream, requestState, iteration);
         } else {

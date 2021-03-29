@@ -117,7 +117,6 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         ResolverRegistry.ResolverView nextPlannedDownstream = downstreamResolvers.get(nextResolvable);
         final Partial<?> downstream = toDownstream(fromDownstream.answer().asCompound(), nextPlannedDownstream, nextResolvable);
         Request downstreamRequest = Request.create(driver(), nextPlannedDownstream.resolver(), downstream, nextResolverIndex);
-        requestState.downstreamManager().addDownstream(downstreamRequest);
         requestFromDownstream(downstreamRequest, fromUpstream, iteration);
         // negated requests can be used twice in a parallel setting, and return the same answer twice
         if (!nextResolvable.isNegated() || (nextResolvable.isNegated() && !requestState.downstreamManager().contains(downstreamRequest))) {

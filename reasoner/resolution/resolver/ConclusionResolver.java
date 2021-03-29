@@ -137,7 +137,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        Optional<Partial.Concludable<?>> upstreamAnswer = requestState.nextAnswer();
+        Optional<Partial.Concludable<?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asConcludable);
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else if (!requestState.cacheComplete() && requestState.downstreamManager().hasDownstream()) {

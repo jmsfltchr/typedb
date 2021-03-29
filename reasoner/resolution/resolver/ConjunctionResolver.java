@@ -91,7 +91,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        RequestState requestState = requestStates.get(fromUpstream);
+        CompoundResolver.RequestState requestState = requestStates.get(fromUpstream);
 
         Plans.Plan plan = plans.getActive(fromUpstream);
 
@@ -110,7 +110,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         }
     }
 
-    private void toNextChild(Response.Answer fromDownstream, int iteration, Request fromUpstream, RequestState requestState, Plans.Plan plan) {
+    private void toNextChild(Response.Answer fromDownstream, int iteration, Request fromUpstream, CompoundResolver.RequestState requestState, Plans.Plan plan) {
         int nextResolverIndex = fromDownstream.planIndex() + 1;
         Resolvable<?> nextResolvable = plan.get(nextResolverIndex);
         ResolverRegistry.ResolverView nextPlannedDownstream = downstreamResolvers.get(nextResolvable);
@@ -353,9 +353,9 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
         @Override
         boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-            ConjunctionResolver.RequestState requestState = requestStates.get(fromUpstream);
-            if (!requestState.hasProduced(upstreamAnswer.conceptMap())) {
-                requestState.recordProduced(upstreamAnswer.conceptMap());
+            CompoundResolver.RequestState requestState = requestStates.get(fromUpstream);
+            if (!requestState.producedRecorder().hasProduced(upstreamAnswer.conceptMap())) {
+                requestState.producedRecorder().produced(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {

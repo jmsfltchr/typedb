@@ -99,7 +99,6 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
                 this.requestStates.put(fromUpstream, responseProducerNextIter);
             }
         }
-        boolean bad = requestStates.values().stream().anyMatch(rs -> rs.iteration() + 1 < iteration);
         return requestStates.get(fromUpstream);
     }
 
@@ -122,7 +121,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState responseProducer, int iteration) {
-        Optional<Partial.Compound<?, ?>> upstreamAnswer = responseProducer.nextAnswer();
+        Optional<Partial.Compound<?, ?>> upstreamAnswer = responseProducer.nextAnswer().map(Partial::asCompound);
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {

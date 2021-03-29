@@ -272,8 +272,8 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-            if (requestState.hasDownstreamProducer()) {
-                requestFromDownstream(requestState.nextDownstreamProducer(), fromUpstream, iteration);
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }

@@ -286,7 +286,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    protected abstract static class RequestState extends Resolver.CachingRequestState<ConceptMap> {
+    protected abstract class RequestState extends Resolver.CachingRequestState<ConceptMap> {
 
         private final ProducedRecorder producedRecorder;
         private final boolean singleAnswerRequired;
@@ -306,7 +306,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         protected Optional<Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable().asMatch();
             if (answerCache.requiresReiteration()) partial.requiresReiteration(true);
-            return Optional.of(partial.toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
+            return Optional.of(partial.toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap)));
         }
 
         public boolean isExploration() {

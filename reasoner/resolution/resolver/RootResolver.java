@@ -110,7 +110,7 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
+        protected void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration) {
             if (requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
@@ -142,10 +142,9 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
+        RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration) {
             return new RequestState(iteration, requestStatePrior.producedRecorder().produced());
         }
-
     }
 
     class Disjunction extends DisjunctionResolver<Disjunction> implements RootResolver<Finished> {
@@ -271,7 +270,7 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
+        protected void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration) {
             if (requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
@@ -315,8 +314,8 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
-            return new RequestState(iteration, requestStatePrior.produced());
+        RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration) {
+            return new RequestState(iteration, requestStatePrior.producedRecorder().produced());
         }
 
         @Override
@@ -332,7 +331,6 @@ public interface RootResolver<TOP extends Top> {
         grakn.core.pattern.Conjunction conjunction() {
             return conjunction;
         }
-
     }
 
 }

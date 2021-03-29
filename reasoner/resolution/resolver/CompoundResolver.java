@@ -90,7 +90,7 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
 
             if (requestState.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                RequestState responseProducerNextIter = requestStateReiterate(fromUpstream, requestState, iteration);
+                CompoundResolver.RequestState responseProducerNextIter = requestStateReiterate(fromUpstream, requestState, iteration);
                 this.requestStates.put(fromUpstream, responseProducerNextIter);
             }
         }

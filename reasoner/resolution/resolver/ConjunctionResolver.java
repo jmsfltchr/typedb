@@ -78,7 +78,8 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
     abstract Conjunction conjunction();
 
-    protected abstract void nextAnswer(Request fromUpstream, RequestState requestState, int iteration);
+    @Override
+    protected abstract void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration);
 
     abstract Optional<AnswerState> toUpstreamAnswer(Partial.Compound<?, ?> fromDownstream);
 
@@ -180,18 +181,18 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
     }
 
     @Override
-    protected RequestState requestStateReiterate(Request fromUpstream, RequestState requestStatePrior,
+    protected CompoundResolver.RequestState requestStateReiterate(Request fromUpstream, CompoundResolver.RequestState requestStatePrior,
                                                  int newIteration) {
         assert newIteration > requestStatePrior.iteration();
         LOG.debug("{}: Updating RequestState for iteration '{}'", name(), newIteration);
         Plans.Plan plan = plans.create(fromUpstream, resolvables, negateds);
         assert !plan.isEmpty() && fromUpstream.partialAnswer().isCompound();
-        RequestState requestStateNextIteration = requestStateForIteration(requestStatePrior, newIteration);
+        CompoundResolver.RequestState requestStateNextIteration = requestStateForIteration(requestStatePrior, newIteration);
         initialiseRequestState(requestStateNextIteration, fromUpstream.partialAnswer().asCompound(), plan);
         return requestStateNextIteration;
     }
 
-    private void initialiseRequestState(RequestState requestState, Partial.Compound<?, ?> partialAnswer, Plans.Plan plan) {
+    private void initialiseRequestState(CompoundResolver.RequestState requestState, Partial.Compound<?, ?> partialAnswer, Plans.Plan plan) {
         ResolverRegistry.ResolverView childResolver = downstreamResolvers.get(plan.get(0));
         Partial<?> downstream = toDownstream(partialAnswer, childResolver, plan.get(0));
         Request toDownstream = Request.create(driver(), childResolver.resolver(), downstream, 0);
@@ -213,7 +214,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
     abstract RequestState requestStateNew(int iteration);
 
-    abstract RequestState requestStateForIteration(RequestState requestStatePrior, int iteration);
+    abstract RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration);
 
     public static class RequestState extends CompoundResolver.RequestState {
 
@@ -338,7 +339,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, ConjunctionResolver.RequestState requestState, int iteration) {
+        protected void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration) {
             if (requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
@@ -369,7 +370,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         }
 
         @Override
-        ConjunctionResolver.RequestState requestStateForIteration(ConjunctionResolver.RequestState requestStatePrior, int iteration) {
+        ConjunctionResolver.RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration) {
             return new ConjunctionResolver.RequestState(iteration);
         }
     }

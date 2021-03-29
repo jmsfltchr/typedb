@@ -47,6 +47,7 @@ import java.util.Set;
 
 import static grakn.common.util.Objects.className;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
+import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
 
 public class ConcludableResolver extends Resolver<ConcludableResolver> {
@@ -177,20 +178,30 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        Optional<Partial.Compound<?, ?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asCompound);
-        if (upstreamAnswer.isPresent()) {
-            answerFound(upstreamAnswer.get(), fromUpstream, iteration);
-        } else {
+        // Go straight downstream or fail if explaining
+        if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
             RuleExplorationRequestState exploration;
-            if (requestState.isExploration() && !requestState.cacheComplete()) {
-                if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
-                    requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
-                } else {
-                    requestState.setCacheComplete(); // TODO: The cache should not be set as complete during recursion
-                    failToUpstream(fromUpstream, iteration);
-                }
+            if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
+                requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 failToUpstream(fromUpstream, iteration);
+            }
+        } else {
+            Optional<Partial.Compound<?, ?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asCompound);
+            if (upstreamAnswer.isPresent()) {
+                answerFound(upstreamAnswer.get(), fromUpstream, iteration);
+            } else {
+                RuleExplorationRequestState exploration;
+                if (requestState.isExploration() && !requestState.cacheComplete()) {
+                    if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
+                        requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
+                    } else {
+                        requestState.setCacheComplete(); // TODO: The cache should not be set as complete during recursion
+                        failToUpstream(fromUpstream, iteration);
+                    }
+                } else {
+                    failToUpstream(fromUpstream, iteration);
+                }
             }
         }
     }
@@ -304,9 +315,17 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected Optional<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
-            Partial.Concludable.Match<?> partial = fromUpstream.partialAnswer().asConcludable().asMatch();
-            if (answerCache.requiresReiteration()) partial.requiresReiteration(true);
-            return Optional.of(partial.toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap)));
+            Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
+            if (answerCache.requiresReiteration()) partial.requiresReiteration(true); // TODO: Changing the upstream's reiteration flag seems wrong
+
+            if (partial.isMatch()) {
+                return Optional.of(partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap)));
+            } else if (partial.isExplain()) {
+                assert conceptMap.concepts().equals(partial.conceptMap().concepts());
+                return Optional.of(partial.asExplain().toUpstreamInferred());
+            } else {
+                throw GraknException.of(ILLEGAL_STATE);
+            }
         }
 
         public boolean isExploration() {

@@ -396,6 +396,14 @@ public interface AnswerState {
             @Override
             default Conclusion<?, ?> asConclusion() { return this; }
 
+            default boolean isMatch() { return false; }
+
+            default Match asMatch() { throw GraknException.of(ILLEGAL_CAST, this.getClass(), Top.Match.class); }
+
+            default boolean isExplain() { return false; }
+
+            default Explain asExplain() { throw GraknException.of(ILLEGAL_CAST, this.getClass(), Top.Explain.class); }
+
             interface Match extends Conclusion<Match, Concludable.Match<?>>, Explainable {
 
                 @Override
@@ -405,6 +413,12 @@ public interface AnswerState {
 
                 @Override
                 Compound.Root.Condition.Match toDownstream(Set<Identifier.Variable.Retrievable> filter);
+
+                @Override
+                default boolean isMatch() { return true; }
+
+                @Override
+                default Match asMatch() { return this; }
 
             }
 
@@ -419,6 +433,12 @@ public interface AnswerState {
 
                 @Override
                 Compound.Condition.Explain toDownstream(Set<Identifier.Variable.Retrievable> filter);
+
+                @Override
+                default boolean isExplain() { return true; }
+
+                @Override
+                default Explain asExplain() { return this; }
 
             }
 

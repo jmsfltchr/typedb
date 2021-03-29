@@ -36,6 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -90,14 +92,31 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         RequestState requestState = this.requestStates.get(fromUpstream);
         fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
-        assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
-        if (!requestState.cacheComplete()) {
+        if (fromUpstream.partialAnswer().asConclusion().isExplain()) {  //TODO: Should we use the upstream or downstream to determine whether to explain?
             FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                     .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
-            if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
-            requestState.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+            FunctionalIterator<Partial.Concludable<?>> materialisedAnswers = materialisations
+                    .map(concepts -> fromDownstream.answer().asConclusion().aggregateToUpstream(concepts))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get);
+            requestState.addExplainAnswers(materialisedAnswers);
+
+            Optional<Partial.Concludable<?>> nextAnswer;
+            if ((nextAnswer = requestState.nextExplainAnswer()).isPresent()) {
+                answerToUpstream(nextAnswer.get(), fromUpstream, iteration);
+            } else {
+                failToUpstream(fromUpstream, iteration);
+            }
+        } else {
+            assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
+            if (!requestState.cacheComplete()) {
+                FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
+                        .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
+                if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
+                requestState.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+            }
+            nextAnswer(fromUpstream, requestState, iteration);
         }
-        nextAnswer(fromUpstream, requestState, iteration);
     }
 
     @Override
@@ -223,10 +242,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
+        private final List<FunctionalIterator<Partial.Concludable<?>>> materialisedAnswers;
 
 
         public RequestState(Request fromUpstream, CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
+            this.materialisedAnswers = new LinkedList<>();
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder();
         }
@@ -261,6 +282,22 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         public boolean cacheComplete() {
             // TODO: Remove this method in favour of the parent's once Conclusion caching works in recursive settings
             return false;
+        }
+
+        public void addExplainAnswers(FunctionalIterator<Partial.Concludable<?>> materialisations) {
+            materialisedAnswers.add(materialisations);
+        }
+
+        public Optional<Partial.Concludable<?>> nextExplainAnswer() {
+            if (hasExplainAnswer()) return Optional.of(materialisedAnswers.get(0).next());
+            else return Optional.empty();
+        }
+
+        private boolean hasExplainAnswer() {
+            while (!materialisedAnswers.isEmpty() && !materialisedAnswers.get(0).hasNext()) {
+                materialisedAnswers.remove(0);
+            }
+            return !materialisedAnswers.isEmpty();
         }
     }
 }

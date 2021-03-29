@@ -691,7 +691,7 @@ public abstract class AnswerStateImpl implements AnswerState {
                 public boolean equals(Object o) {
                     if (this == o) return true;
                     if (o == null || getClass() != o.getClass()) return false;
-                    MatchImpl that = (MatchImpl) o;
+                    MatchImpl<?> that = (MatchImpl<?>) o;
                     return Objects.equals(root(), that.root()) &&
                             Objects.equals(conceptMap(), that.conceptMap()) &&
                             Objects.equals(parent(), that.parent()) &&
@@ -769,7 +769,6 @@ public abstract class AnswerStateImpl implements AnswerState {
                 @Override
                 public int hashCode() {
                     return hash;
-
                 }
             }
         }
@@ -911,8 +910,7 @@ public abstract class AnswerStateImpl implements AnswerState {
                 public Optional<Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
                     Optional<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
                     return unUnified.map(ans -> {
-                        ConclusionAnswer conclusionAnswer = new ConclusionAnswer(rule(), toConceptMap(concepts), unifier(), conditionAnswer());
-                        return parent().with(ans, true, rule(), toConceptMap(concepts), unifier(), conditionAnswer());
+                        return parent().with(ans, requiresReiteration(), rule(), toConceptMap(concepts), unifier(), conditionAnswer());
                     });
                 }
 

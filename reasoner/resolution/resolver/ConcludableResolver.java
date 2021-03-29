@@ -330,7 +330,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    private static class RuleExplorationRequestState extends RequestState {
+    private class RuleExplorationRequestState extends RequestState {
 
         private final DownstreamManager downstreamManager;
 
@@ -365,7 +365,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    private static class RetrievalRequestState extends RequestState {
+    private class RetrievalRequestState extends RequestState {
 
         public RetrievalRequestState(Request fromUpstream, CacheTracker<ConceptMap>.AnswerCache answerCache,
                                      int iteration, boolean singleAnswerRequired) {

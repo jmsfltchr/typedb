@@ -333,16 +333,17 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         @Override
         protected Optional<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
-            if (answerCache.requiresReiteration()) partial.requiresReiteration(true); // TODO: Changing the upstream's reiteration flag seems wrong
-
+            Partial.Compound<?, ?> upstreamAnswer;
             if (partial.isMatch()) {
-                return Optional.of(partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap)));
+                upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
             } else if (partial.isExplain()) {
                 assert conceptMap.concepts().equals(partial.conceptMap().concepts());
-                return Optional.of(partial.asExplain().toUpstreamInferred());
+                upstreamAnswer = partial.asExplain().toUpstreamInferred();
             } else {
                 throw GraknException.of(ILLEGAL_STATE);
             }
+            upstreamAnswer.requiresReiteration(answerCache.requiresReiteration());
+            return Optional.of(upstreamAnswer);
         }
 
         public boolean isExploration() {

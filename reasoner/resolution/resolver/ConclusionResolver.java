@@ -280,8 +280,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         @Override
         protected Optional<? extends Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
             Partial.Conclusion<?, ?> conclusion = fromUpstream.partialAnswer().asConclusion();
-            if (answerCache.requiresReiteration()) conclusion.requiresReiteration(true);
-            return conclusion.aggregateToUpstream(answer);
+            return  conclusion.aggregateToUpstream(answer).map(p -> {
+                p.requiresReiteration(answerCache.requiresReiteration());
+                return p;
+            });
         }
 
         @Override

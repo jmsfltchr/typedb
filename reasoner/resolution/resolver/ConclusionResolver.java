@@ -156,14 +156,22 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        Optional<Partial.Concludable<?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asConcludable);
-        if (upstreamAnswer.isPresent()) {
-            answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
-        } else if (!requestState.cacheComplete() && requestState.downstreamManager().hasDownstream()) {
-            requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
+        if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
+            } else {
+                failToUpstream(fromUpstream, iteration);
+            }
         } else {
-            // requestState.setCacheComplete(); // TODO: Reinstate once Conclusion caching works in recursive settings
-            failToUpstream(fromUpstream, iteration);
+            Optional<Partial.Concludable<?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asConcludable);
+            if (upstreamAnswer.isPresent()) {
+                answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
+            } else if (!requestState.cacheComplete() && requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
+            } else {
+                // requestState.setCacheComplete(); // TODO: Reinstate once Conclusion caching works in recursive settings
+                failToUpstream(fromUpstream, iteration);
+            }
         }
     }
 
@@ -190,14 +198,24 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         CacheTracker<Map<Identifier.Variable, Concept>> tracker = cacheTrackers.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
+        boolean deduplicate;
+        boolean useSubsumption;
+        if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
+            deduplicate = false;
+            useSubsumption = false;
+        } else {
+            deduplicate = true;
+            useSubsumption = true;
+        }
+
         CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache;
         boolean isTracked = tracker.isTracked(answerFromUpstream);
         if (isTracked) {
             answerCache = tracker.getAnswerCache(answerFromUpstream);
         } else {
-            answerCache = tracker.createAnswerCache(answerFromUpstream, true);
+            answerCache = tracker.createAnswerCache(answerFromUpstream, useSubsumption);
         }
-        RequestState requestState = new RequestState(fromUpstream, answerCache, iteration);
+        RequestState requestState = new RequestState(fromUpstream, answerCache, iteration, deduplicate);
         assert fromUpstream.partialAnswer().isConclusion();
         Partial.Conclusion<?, ?> partialAnswer = fromUpstream.partialAnswer().asConclusion();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
@@ -243,10 +261,13 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
         private final List<FunctionalIterator<Partial.Concludable<?>>> materialisedAnswers;
+        private final boolean deduplicate;
 
 
-        public RequestState(Request fromUpstream, CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache, int iteration) {
+        public RequestState(Request fromUpstream, CacheTracker<Map<Identifier.Variable, Concept>>.AnswerCache answerCache,
+                            int iteration, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration);
+            this.deduplicate = deduplicate;
             this.materialisedAnswers = new LinkedList<>();
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder();
@@ -264,8 +285,9 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
 
         @Override
-        protected boolean isDuplicate(ConceptMap conceptMap) {
-            return producedRecorder.produced(conceptMap);
+        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
+            if (deduplicate) return producedRecorder.produced(conceptMap);
+            return false;
         }
 
         public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {

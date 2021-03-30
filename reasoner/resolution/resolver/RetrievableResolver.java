@@ -152,7 +152,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
 
         @Override
-        protected boolean isDuplicate(ConceptMap conceptMap) {
+        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
             return false;
         }
 

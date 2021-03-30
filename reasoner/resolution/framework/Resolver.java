@@ -237,7 +237,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 Optional<ANSWER> answer = next();
                 if (answer.isPresent()) {
                     pointer++;
-                    upstreamAnswer = toUpstream(answer.get()).filter(partial -> !isDuplicate(partial.conceptMap()));
+                    upstreamAnswer = toUpstream(answer.get()).filter(partial -> !optionallyDeduplicate(partial.conceptMap()));
                     if (upstreamAnswer.isPresent()) break;
                 } else {
                     break;
@@ -248,7 +248,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected abstract Optional<? extends Partial<?>> toUpstream(ANSWER conceptMap);
 
-        protected abstract boolean isDuplicate(ConceptMap conceptMap);
+        protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
 
         protected abstract Optional<ANSWER> next();
 
@@ -290,10 +290,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return answerCaches.get(fromUpstream);
         }
 
-        public AnswerCache createAnswerCache(ConceptMap fromUpstream, boolean registerSubsumers) {
+        public AnswerCache createAnswerCache(ConceptMap fromUpstream, boolean useSubsumption) {
             assert !answerCaches.containsKey(fromUpstream);
             Set<ConceptMap> subsumingAnswers;
-            if (registerSubsumers) {
+            if (useSubsumption) {
                 subsumingAnswers = getSubsumingAnswers(fromUpstream);
                 subsumingAnswers.remove(fromUpstream);
             } else {

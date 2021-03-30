@@ -90,7 +90,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
         RequestState requestState = this.requestStates.get(fromUpstream);
-        fromUpstream.partialAnswer().requiresReiteration(fromDownstream.answer().requiresReiteration());
 
         if (fromUpstream.partialAnswer().asConclusion().isExplain()) {  //TODO: Should we use the upstream or downstream to determine whether to explain?
             FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
@@ -180,7 +179,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             requestStates.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
             RequestState requestState = this.requestStates.get(fromUpstream);
-            assert requestState.iteration() == iteration || requestState.iteration() + 1 == iteration;
 
             if (requestState.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
@@ -281,7 +279,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         protected Optional<? extends Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
             Partial.Conclusion<?, ?> conclusion = fromUpstream.partialAnswer().asConclusion();
             return  conclusion.aggregateToUpstream(answer).map(p -> {
-                p.requiresReiteration(answerCache.requiresReiteration());
+                if (answerCache.requiresReiteration()) p.setRequiresReiteration();
                 return p;
             });
         }

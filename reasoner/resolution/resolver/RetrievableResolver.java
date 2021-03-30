@@ -147,8 +147,9 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         @Override
         protected Optional<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Retrievable<?> retrievable = fromUpstream.partialAnswer().asRetrievable();
-            if (answerCache.requiresReiteration()) retrievable.requiresReiteration(true);
-            return Optional.of(retrievable.aggregateToUpstream(conceptMap));
+            Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(conceptMap);
+            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
+            return Optional.of(upstreamAnswer);
         }
 
         @Override

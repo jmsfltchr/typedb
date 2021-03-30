@@ -342,7 +342,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             } else {
                 throw GraknException.of(ILLEGAL_STATE);
             }
-            upstreamAnswer.requiresReiteration(answerCache.requiresReiteration());
+            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
             return Optional.of(upstreamAnswer);
         }
 

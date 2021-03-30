@@ -47,7 +47,7 @@ public interface AnswerState {
 
     boolean requiresReiteration();
 
-    void requiresReiteration(boolean requiresReiteration);
+    void setRequiresReiteration();
 
     Actor.Driver<? extends Resolver<?>> root();
 

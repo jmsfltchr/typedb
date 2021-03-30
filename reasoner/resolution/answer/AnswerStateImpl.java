@@ -63,8 +63,8 @@ public abstract class AnswerStateImpl implements AnswerState {
     }
 
     @Override
-    public void requiresReiteration(boolean requiresReiteration) {
-        this.requiresReiteration = requiresReiteration;
+    public void setRequiresReiteration() {
+        this.requiresReiteration = true;
     }
 
     @Override

@@ -386,6 +386,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                         AnswerCache subsumingCache;
                         if ((subsumingCache = answerCaches.get(subsumingAnswer)).exhausted()) {
                             setExhausted(subsumingCache.answers);
+                            if (subsumingCache.requiresReiteration()) setRequiresReiteration();
                             return true;
                         }
                     }

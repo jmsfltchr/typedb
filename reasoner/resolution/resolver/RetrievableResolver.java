@@ -91,7 +91,6 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             requestStates.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
             RequestState requestStates = this.requestStates.get(fromUpstream);
-            assert iteration <= requestStates.iteration() + 1;
 
             if (requestStates.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state

@@ -31,7 +31,6 @@ import grakn.core.reasoner.resolution.answer.Explanation;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
-import grakn.core.reasoner.resolution.resolver.CompoundResolver.RequestState;
 import grakn.core.traversal.TraversalEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

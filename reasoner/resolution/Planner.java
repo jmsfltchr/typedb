@@ -18,8 +18,6 @@
 package grakn.core.reasoner.resolution;
 
 import grakn.core.common.exception.GraknException;
-import grakn.core.concept.ConceptManager;
-import grakn.core.logic.LogicManager;
 import grakn.core.logic.resolvable.Concludable;
 import grakn.core.logic.resolvable.Resolvable;
 import grakn.core.pattern.variable.ThingVariable;
@@ -34,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static grakn.common.collection.Collections.set;
@@ -42,19 +39,12 @@ import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
 
 public class Planner {
-    private final ConceptManager conceptMgr;
-    private final LogicManager logicMgr;
-
-    Planner(ConceptManager conceptMgr, LogicManager logicMgr) {
-        this.conceptMgr = conceptMgr;
-        this.logicMgr = logicMgr;
-    }
 
     public List<Resolvable<?>> plan(Set<Resolvable<?>> resolvables, Map<Resolvable<?>, Integer> resolvableStatistics, Set<Retrievable> boundVariables) {
         return new Plan(resolvables, resolvableStatistics, boundVariables).plan;
     }
 
-    class Plan {
+    static class Plan {
         private final List<Resolvable<?>> plan;
         private final Map<Resolvable<?>, Set<Retrievable>> dependencies;
         private final Set<Retrievable> answered;

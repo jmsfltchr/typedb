@@ -20,7 +20,6 @@ package grakn.core.reasoner;
 import grakn.common.concurrent.NamedThreadFactory;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.parameters.Arguments;
-import grakn.core.common.parameters.Context;
 import grakn.core.common.parameters.Options;
 import grakn.core.common.parameters.Options.Database;
 import grakn.core.concept.ConceptManager;
@@ -58,7 +57,7 @@ public class ReasonerTest {
     private static RocksGrakn grakn;
 
     private RocksTransaction singleThreadElgTransaction(RocksSession session, Arguments.Transaction.Type transactionType) {
-        RocksTransaction transaction = session.transaction(transactionType, new Options.Transaction().infer(true).traceInference(true));
+        RocksTransaction transaction = session.transaction(transactionType, new Options.Transaction().infer(true));
         ActorExecutorGroup service = new ActorExecutorGroup(1, new NamedThreadFactory("grakn-core-actor"));
         transaction.reasoner().resolverRegistry().setExecutorService(service);
         return transaction;
@@ -207,8 +206,7 @@ public class ReasonerTest {
                 txn.commit();
             }
             try (RocksTransaction txn = singleThreadElgTransaction(session, Arguments.Transaction.Type.READ)) {
-                List<ConceptMap> ans = txn.query().match(Graql.parseQuery("match $x has is-still-good $a;").asMatch(),
-                                                         new Context.Query(txn.context(), new Options.Query().parallel(false))).toList();
+                List<ConceptMap> ans = txn.query().match(Graql.parseQuery("match $x has is-still-good $a;").asMatch()).toList();
 
                 ans.iterator().forEachRemaining(a -> {
                     assertFalse(a.get("a").asAttribute().asBoolean().getValue());

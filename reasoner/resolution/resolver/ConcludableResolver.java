@@ -178,7 +178,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        // Go straight downstream or fail if explaining
         if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
             RuleExplorationRequestState exploration;
             if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {

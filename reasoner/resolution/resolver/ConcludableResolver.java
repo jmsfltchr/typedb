@@ -261,7 +261,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         } else {
             assert fromUpstream.partialAnswer().isConcludable();
             CacheTracker<ConceptMap>.AnswerCache answerCache = tracker.createAnswerCache(answerFromUpstream, useSubsumption);
-            if (!answerCache.exhausted()) {
+            if (!answerCache.complete()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 answerCache.recordNewAnswers(traversal);
             }

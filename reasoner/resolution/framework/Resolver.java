@@ -253,11 +253,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         protected abstract Optional<ANSWER> next();
 
         public boolean cacheComplete() {
-            return answerCache.exhausted();
+            return answerCache.complete();
         }
 
         public void setCacheComplete() {
-            answerCache.setExhausted();
+            answerCache.setComplete();
         }
     }
 
@@ -337,7 +337,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             private boolean retrievedFromIncomplete;
             private boolean requiresReiteration;
             private FunctionalIterator<ANSWER> traversal;
-            private boolean exhausted;
+            private boolean completed;
             private final ConceptMap state;
             private final SubsumptionOperation<ANSWER> subsumption;
 
@@ -350,15 +350,15 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.answersSet = new HashSet<>();
                 this.retrievedFromIncomplete = false;
                 this.requiresReiteration = false;
-                this.exhausted = false;
+                this.completed = false;
             }
 
             public void recordNewAnswer(ANSWER newAnswer) {
-                if (!exhausted()) newAnswer(newAnswer);
+                if (!complete()) newAnswer(newAnswer);
             }
 
             public void recordNewAnswers(Iterator<ANSWER> newAnswers) {
-                if (exhausted()) throw GraknException.of(ILLEGAL_STATE);
+                if (complete()) throw GraknException.of(ILLEGAL_STATE);
                 traversal = traversal.link(newAnswers);
             }
 
@@ -366,26 +366,26 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.requiresReiteration = true;
             }
 
-            public void setExhausted() {
-                exhausted = true;
+            public void setComplete() {
+                completed = true;
             }
 
-            public void setExhausted(List<ANSWER> exhaustiveAnswers) {
-                List<ANSWER> newAnswers = iterate(exhaustiveAnswers)
+            public void setComplete(List<ANSWER> completeAnswers) {
+                List<ANSWER> newAnswers = iterate(completeAnswers)
                         .filter(e -> subsumption.subsumes(e, state))
                         .filter(e -> !answersSet.contains(e)).toList();
                 this.answers.addAll(newAnswers);
                 this.answersSet.addAll(newAnswers);
-                setExhausted();
+                setComplete();
             }
 
-            public boolean exhausted() {
-                if (exhausted) return true;
+            public boolean complete() {
+                if (completed) return true;
                 for (ConceptMap subsumingAnswer : subsumingAnswers) {
                     if (answerCaches.containsKey(subsumingAnswer)){
                         AnswerCache subsumingCache;
-                        if ((subsumingCache = answerCaches.get(subsumingAnswer)).exhausted()) {
-                            setExhausted(subsumingCache.answers);
+                        if ((subsumingCache = answerCaches.get(subsumingAnswer)).complete()) {
+                            setComplete(subsumingCache.answers);
                             if (subsumingCache.requiresReiteration()) setRequiresReiteration();
                             return true;
                         }

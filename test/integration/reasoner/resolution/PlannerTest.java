@@ -33,6 +33,7 @@ import grakn.core.test.integration.util.Util;
 import graql.lang.Graql;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -108,6 +109,7 @@ public class PlannerTest {
         assertEquals(list(retrievable, concludable), plan);
     }
 
+    @Ignore
     @Test
     public void test_planner_prioritises_largest_retrievable_without_dependencies() {
         rocksTransaction.query().undefine(Graql.parseQuery("undefine person owns name;"));

@@ -59,7 +59,7 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
     }
 
     @Override
-    protected void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration) {
+    protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
         if (requestState.downstreamManager().hasDownstream()) {
             requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
@@ -75,7 +75,7 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
 
     @Override
     boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-        CompoundResolver.RequestState requestState = requestStates.get(fromUpstream);
+        RequestState requestState = requestStates.get(fromUpstream);
         if (!requestState.producedRecorder().hasProduced(upstreamAnswer.conceptMap())) {
             requestState.producedRecorder().produced(upstreamAnswer.conceptMap());
             answerToUpstream(upstreamAnswer, fromUpstream, iteration);
@@ -86,12 +86,12 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
     }
 
     @Override
-    ConjunctionResolver.RequestState requestStateNew(int iteration) {
+    RequestState requestStateNew(int iteration) {
         return new RequestState(iteration);
     }
 
     @Override
-    ConjunctionResolver.RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration) {
+    RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
         return new RequestState(iteration);
     }
 

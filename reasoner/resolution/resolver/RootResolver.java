@@ -31,6 +31,7 @@ import grakn.core.reasoner.resolution.answer.Explanation;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
+import grakn.core.reasoner.resolution.resolver.CompoundResolver.RequestState;
 import grakn.core.traversal.TraversalEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +111,7 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration) {
+        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
             if (requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
@@ -126,7 +127,7 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-            CompoundResolver.RequestState requestState = requestStates.get(fromUpstream);
+            RequestState requestState = requestStates.get(fromUpstream);
             if (!requestState.producedRecorder().hasProduced(upstreamAnswer.conceptMap())) {
                 requestState.producedRecorder().produced(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
@@ -142,7 +143,7 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration) {
+        RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
             return new RequestState(iteration, requestStatePrior.producedRecorder().produced());
         }
     }
@@ -270,7 +271,7 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, CompoundResolver.RequestState requestState, int iteration) {
+        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
             if (requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
@@ -314,7 +315,7 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        RequestState requestStateForIteration(CompoundResolver.RequestState requestStatePrior, int iteration) {
+        RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
             return new RequestState(iteration, requestStatePrior.producedRecorder().produced());
         }
 

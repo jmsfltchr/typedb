@@ -191,11 +191,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 answerFound(upstreamAnswer.get(), fromUpstream, iteration);
             } else {
                 RuleExplorationRequestState exploration;
-                if (requestState.isExploration() && !requestState.cacheComplete()) {
+                if (requestState.isExploration() && !requestState.answerCache().complete()) {
                     if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
                         requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
                     } else {
-                        requestState.setCacheComplete(); // TODO: The cache should not be set as complete during recursion
+                        requestState.answerCache().setComplete(); // TODO: The cache should not be set as complete during recursion
                         failToUpstream(fromUpstream, iteration);
                     }
                 } else {

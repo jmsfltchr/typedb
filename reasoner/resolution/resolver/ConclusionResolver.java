@@ -108,7 +108,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             }
         } else {
             assert cacheTrackers.get(fromUpstream.partialAnswer().root()).isTracked(fromUpstream.partialAnswer().conceptMap());
-            if (!requestState.cacheComplete()) {
+            if (!requestState.answerCache().complete()) {
                 FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                         .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
                 if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
@@ -165,10 +165,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             Optional<Partial.Concludable<?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asConcludable);
             if (upstreamAnswer.isPresent()) {
                 answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
-            } else if (!requestState.cacheComplete() && requestState.downstreamManager().hasDownstream()) {
+            } else if (!requestState.answerCache().complete() && requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
-                // requestState.setCacheComplete(); // TODO: Reinstate once Conclusion caching works in recursive settings
+                // requestState.answerCache().setComplete(); // TODO: Reinstate once Conclusion caching works in recursive settings
                 failToUpstream(fromUpstream, iteration);
             }
         }
@@ -218,7 +218,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Partial.Conclusion<?, ?> partialAnswer = fromUpstream.partialAnswer().asConclusion();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
-        if (!requestState.cacheComplete()) {
+        if (!requestState.answerCache().complete()) {
             assert conclusion.retrievableIds().containsAll(partialAnswer.conceptMap().concepts().keySet());
             if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.conceptMap().concepts().size() &&
                     partialAnswer.conceptMap().concepts().containsKey(conclusion.generating().get().id())) {
@@ -298,12 +298,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         @Override
         protected Optional<Map<Identifier.Variable, Concept>> next() {
             return answerCache.next(pointer, true);
-        }
-
-        @Override
-        public boolean cacheComplete() {
-            // TODO: Remove this method in favour of the parent's once Conclusion caching works in recursive settings
-            return false;
         }
 
         public void addExplainAnswers(FunctionalIterator<Partial.Concludable<?>> materialisations) {

@@ -252,12 +252,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected abstract Optional<ANSWER> next();
 
-        public boolean cacheComplete() {
-            return answerCache.complete();
-        }
-
-        public void setCacheComplete() {
-            answerCache.setComplete();
+        public CacheTracker<ANSWER>.AnswerCache answerCache() {
+            return answerCache;
         }
     }
 

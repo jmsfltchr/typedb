@@ -325,7 +325,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
-            if (deduplicate) return producedRecorder.produced(conceptMap);
+            if (deduplicate) return producedRecorder.record(conceptMap);
             return false;
         }
 

@@ -436,17 +436,17 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.produced = produced;
         }
 
-        public boolean produced(ConceptMap conceptMap) {
+        public boolean record(ConceptMap conceptMap) {
             if (produced.contains(conceptMap)) return true;
             produced.add(conceptMap);
             return false;
         }
 
-        public boolean hasProduced(ConceptMap conceptMap) { // TODO method shouldn't be needed
+        public boolean hasRecorded(ConceptMap conceptMap) { // TODO method shouldn't be needed
             return produced.contains(conceptMap);
         }
 
-        public Set<ConceptMap> produced() {
+        public Set<ConceptMap> recorded() {
             return produced;
         }
     }

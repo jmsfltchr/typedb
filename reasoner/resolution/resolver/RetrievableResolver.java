@@ -45,7 +45,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RequestState> requestStates;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheTracker<ConceptMap>> cacheTrackers;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMap>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -53,7 +53,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
               registry, traversalEngine, conceptMgr, resolutionTracing);
         this.retrievable = retrievable;
         this.requestStates = new HashMap<>();
-        this.cacheTrackers = new HashMap<>();
+        this.cacheRegisters = new HashMap<>();
     }
 
     @Override
@@ -106,13 +106,13 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         assert fromUpstream.partialAnswer().isRetrievable();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheTrackers.putIfAbsent(root, new CacheTracker<>(iteration, new ConceptMapSubsumption()));
-        CacheTracker<ConceptMap> tracker = cacheTrackers.get(root);
-        CacheTracker<ConceptMap>.AnswerCache answerCache;
-        if (tracker.isTracked(answerFromUpstream)) {
-            answerCache = tracker.getAnswerCache(answerFromUpstream);
+        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration, new ConceptMapSubsumption()));
+        CacheRegister<ConceptMap> cacheRegister = cacheRegisters.get(root);
+        CacheRegister<ConceptMap>.AnswerCache answerCache;
+        if (cacheRegister.isRegistered(answerFromUpstream)) {
+            answerCache = cacheRegister.get(answerFromUpstream);
         } else {
-            answerCache = tracker.createAnswerCache(answerFromUpstream, false);
+            answerCache = cacheRegister.createAnswerCache(answerFromUpstream, false);
             FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
             answerCache.recordNewAnswers(traversal);
         }
@@ -129,7 +129,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class ConceptMapSubsumption extends CacheTracker.SubsumptionOperation<ConceptMap> {
+    private static class ConceptMapSubsumption extends CacheRegister.SubsumptionOperation<ConceptMap> {
 
         @Override
         protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
@@ -139,7 +139,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
-        public RequestState(Request fromUpstream, CacheTracker<ConceptMap>.AnswerCache answerCache, int iteration) {
+        public RequestState(Request fromUpstream, CacheRegister<ConceptMap>.AnswerCache answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
         }
 

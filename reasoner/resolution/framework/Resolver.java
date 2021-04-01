@@ -221,10 +221,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected abstract static class CachingRequestState<ANSWER> extends RequestState {
 
         protected final Request fromUpstream;
-        protected final CacheTracker<ANSWER>.AnswerCache answerCache;
+        protected final CacheRegister<ANSWER>.AnswerCache answerCache;
         protected int pointer;
 
-        public CachingRequestState(Request fromUpstream, CacheTracker<ANSWER>.AnswerCache answerCache, int iteration) {
+        public CachingRequestState(Request fromUpstream, CacheRegister<ANSWER>.AnswerCache answerCache, int iteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
             this.answerCache = answerCache;
@@ -252,23 +252,23 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected abstract Optional<ANSWER> next();
 
-        public CacheTracker<ANSWER>.AnswerCache answerCache() {
+        public CacheRegister<ANSWER>.AnswerCache answerCache() {
             return answerCache;
         }
     }
 
-    public static class CacheTracker<ANSWER> {
+    public static class CacheRegister<ANSWER> {
         HashMap<ConceptMap, AnswerCache> answerCaches;
         private int iteration;
         private final SubsumptionOperation<ANSWER> subsumption;
 
-        public CacheTracker(int iteration, SubsumptionOperation<ANSWER> subsumption) {
+        public CacheRegister(int iteration, SubsumptionOperation<ANSWER> subsumption) {
             this.iteration = iteration;
             this.subsumption = subsumption;
             this.answerCaches = new HashMap<>();
         }
 
-        public boolean isTracked(ConceptMap conceptMap) {
+        public boolean isRegistered(ConceptMap conceptMap) {
             return answerCaches.containsKey(conceptMap);
         }
 
@@ -282,7 +282,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             answerCaches = new HashMap<>();
         }
 
-        public AnswerCache getAnswerCache(ConceptMap fromUpstream) {
+        public AnswerCache get(ConceptMap fromUpstream) {
             return answerCaches.get(fromUpstream);
         }
 

@@ -382,7 +382,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected Optional<ConceptMap> next() {
-            return answerCache.next(pointer, true);
+            return answerCache.next(pointer, false);
         }
 
         @Override
@@ -414,7 +414,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected Optional<ConceptMap> next() {
-            return answerCache.next(pointer, false);
+            return answerCache.next(pointer, true);
         }
 
         @Override

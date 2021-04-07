@@ -162,7 +162,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
         @Override
         protected Optional<ConceptMap> next() {
-            return answerCache.next(pointer, false);
+            return answerCache.next(pointer, true);
         }
     }
 }

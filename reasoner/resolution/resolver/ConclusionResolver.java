@@ -303,7 +303,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         @Override
         protected Optional<Map<Identifier.Variable, Concept>> next() {
-            return answerCache.next(pointer, true);
+            return answerCache.next(pointer, false);
         }
 
         public void addExplainAnswers(FunctionalIterator<Partial.Concludable<?>> materialisations) {

@@ -297,7 +297,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         private final List<ANSWER> answers;
         private final Set<ANSWER> answersSet;
         private final Set<ConceptMap> subsumingCacheKeys;
-        private boolean retrievedFromIncomplete;
+        private boolean retrievalBlockedByUnexplored;
         private boolean requiresReiteration;
         private FunctionalIterator<ANSWER> unexploredAnswers;
         private boolean complete;
@@ -311,7 +311,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.unexploredAnswers = Iterators.empty();
             this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
             this.answersSet = new HashSet<>();
-            this.retrievedFromIncomplete = false;
+            this.retrievalBlockedByUnexplored = false;
             this.requiresReiteration = false;
             this.complete = false;
             this.cacheRegister.register(state, this);
@@ -328,7 +328,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             unexploredAnswers = unexploredAnswers.link(newAnswers);
         }
 
-        public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {
+        // TODO: A method called next shouldn't take an index
+        // TODO: canRecordNewAnswers only makes sense in the caller
+        public Optional<ANSWER> next(int index, boolean flagRetrievalBlocking) {
             assert index >= 0;
             if (index < answers.size()) {
                 return Optional.of(answers.get(index));
@@ -337,7 +339,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                     Optional<ANSWER> nextAnswer = addIfAbsent(unexploredAnswers.next());
                     if (nextAnswer.isPresent()) return nextAnswer;
                 }
-                if (!canRecordNewAnswers) retrievedFromIncomplete = true;
+                if (flagRetrievalBlocking) retrievalBlockedByUnexplored = true;
                 return Optional.empty();
             } else {
                 throw GraknException.of(ILLEGAL_STATE);
@@ -348,7 +350,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             if (answersSet.contains(answer)) return Optional.empty();
             answers.add(answer);
             answersSet.add(answer);
-            if (retrievedFromIncomplete) this.requiresReiteration = true;
+            if (retrievalBlockedByUnexplored) this.requiresReiteration = true;
             return Optional.of(answer);
         }
 
@@ -377,7 +379,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 if (cacheRegister.isRegistered(subsumingCacheKey)) {
                     AnswerCache<ANSWER> subsumingCache;
                     if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
-                        // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient
+                        // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.
                         return Optional.of(subsumingCache);
                     }
                 }

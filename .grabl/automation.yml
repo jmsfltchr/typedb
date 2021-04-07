@@ -103,7 +103,7 @@ build:
         bazel test //test/behaviour/resolution/tests/compound_queries:test --test_output=streamed
         bazel test //test/behaviour/resolution/tests/relation_inference:test --test_output=streamed
         bazel test //test/behaviour/resolution/tests/rule_interaction:test --test_output=streamed
-        bazel test //test/behaviour/resolution/tests/type_hierarchy:test --test_output=streamed
+      # bazel test //test/behaviour/resolution/tests/type_hierarchy:test --test_output=streamed
         bazel test //test/behaviour/resolution/tests/value_predicate:test --test_output=streamed
         bazel test //test/behaviour/resolution/tests/resolution_test_framework:test --test_output=streamed
         bazel test //test/behaviour/resolution/tests/negation:test --test_output=streamed

@@ -191,7 +191,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 answerFound(upstreamAnswer.get(), fromUpstream, iteration);
             } else {
                 RuleExplorationRequestState exploration;
-                if (requestState.isExploration() && !requestState.answerCache().complete()) {
+                if (requestState.isExploration() && !requestState.answerCache().isComplete()) {
                     if ((exploration = requestState.asExploration()).downstreamManager().hasDownstream()) {
                         requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
                     } else {
@@ -230,7 +230,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             recursionState.nextIteration(iteration);
         }
 
-        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration, new ConceptMapSubsumption()));
+        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
         CacheRegister<ConceptMap> cacheRegister = cacheRegisters.get(root);
         if (cacheRegister.iteration() < iteration) {
             cacheRegister.nextIteration(iteration);
@@ -252,17 +252,17 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         assert cacheRegister.isRegistered(answerFromUpstream) == recursionState.hasReceived(answerFromUpstream); // TODO: Should be the same, and therefore can remove this part of recursionState
         if (cacheRegister.isRegistered(answerFromUpstream)) {
-            CacheRegister<ConceptMap>.AnswerCache answerCache = cacheRegister.get(answerFromUpstream);
+            AnswerCache<ConceptMap> answerCache = cacheRegister.get(answerFromUpstream);
             RetrievalRequestState requestState = new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
             if (!recursionState.hasReceivedFrom(answerFromUpstream, fromUpstream))
                 requestState.asRetrieval().setRequiresReiteration();
             return requestState;
         } else {
             assert fromUpstream.partialAnswer().isConcludable();
-            CacheRegister<ConceptMap>.AnswerCache answerCache = cacheRegister.createAnswerCache(answerFromUpstream, useSubsumption);
-            if (!answerCache.complete()) {
+            AnswerCache<ConceptMap> answerCache =  new ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
+            if (!answerCache.isComplete()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
-                answerCache.recordNewAnswers(traversal);
+                answerCache.cache(traversal);
             }
             recursionState.recordReceived(fromUpstream);
             RequestState requestState = new RuleExplorationRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
@@ -301,7 +301,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private static class ConceptMapSubsumption extends CacheRegister.SubsumptionOperation<ConceptMap> {
+    public static class ConceptMapCache extends AnswerCache<ConceptMap> {
+
+        protected ConceptMapCache(CacheRegister<ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
+            super(cacheRegister, state, useSubsumption);
+        }
 
         @Override
         protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
@@ -315,7 +319,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         private final boolean singleAnswerRequired;
         private final boolean deduplicate;
 
-        public RequestState(Request fromUpstream, CacheRegister<ConceptMap>.AnswerCache answerCache, int iteration,
+        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration,
                             boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration);
             this.singleAnswerRequired = singleAnswerRequired;
@@ -370,7 +374,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         private final DownstreamManager downstreamManager;
 
-        public RuleExplorationRequestState(Request fromUpstream, CacheRegister<ConceptMap>.AnswerCache answerCache,
+        public RuleExplorationRequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache,
                                            int iteration, boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
             this.downstreamManager = new DownstreamManager();
@@ -396,14 +400,14 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         public void newAnswer(ConceptMap conceptMap, boolean requiresReiteration) {
-            answerCache.recordNewAnswer(conceptMap);
+            answerCache.cache(conceptMap);
             if (requiresReiteration) answerCache.setRequiresReiteration();
         }
     }
 
     private class RetrievalRequestState extends RequestState {
 
-        public RetrievalRequestState(Request fromUpstream, CacheRegister<ConceptMap>.AnswerCache answerCache,
+        public RetrievalRequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache,
                                      int iteration, boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
         }

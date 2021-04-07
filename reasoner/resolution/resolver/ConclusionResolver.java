@@ -108,7 +108,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             }
         } else {
             assert cacheRegisters.get(fromUpstream.partialAnswer().root()).isRegistered(fromUpstream.partialAnswer().conceptMap());
-            if (!requestState.answerCache().complete()) {
+            if (!requestState.answerCache().isComplete()) {
                 FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                         .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
                 if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
@@ -165,7 +165,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             Optional<Partial.Concludable<?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asConcludable);
             if (upstreamAnswer.isPresent()) {
                 answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
-            } else if (!requestState.answerCache().complete() && requestState.downstreamManager().hasDownstream()) {
+            } else if (!requestState.answerCache().isComplete() && requestState.downstreamManager().hasDownstream()) {
                 requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 // requestState.answerCache().setComplete(); // TODO: Reinstate once Conclusion caching works in recursive settings
@@ -192,7 +192,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private RequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration, new FullMapSubsumption()));
+        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
         CacheRegister<Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
@@ -206,18 +206,18 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             useSubsumption = true;
         }
 
-        CacheRegister<Map<Identifier.Variable, Concept>>.AnswerCache answerCache;
+        AnswerCache<Map<Identifier.Variable, Concept>> answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
-            answerCache = cacheRegister.createAnswerCache(answerFromUpstream, useSubsumption);
+            answerCache = new IdentifiedConceptsCache(cacheRegister, answerFromUpstream, useSubsumption);
         }
         RequestState requestState = new RequestState(fromUpstream, answerCache, iteration, deduplicate);
         assert fromUpstream.partialAnswer().isConclusion();
         Partial.Conclusion<?, ?> partialAnswer = fromUpstream.partialAnswer().asConclusion();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
         // and if there's extra variables to be populated
-        if (!requestState.answerCache().complete()) {
+        if (!requestState.answerCache().isComplete()) {
             assert conclusion.retrievableIds().containsAll(partialAnswer.conceptMap().concepts().keySet());
             if (conclusion.generating().isPresent() && conclusion.retrievableIds().size() > partialAnswer.conceptMap().concepts().size() &&
                     partialAnswer.conceptMap().concepts().containsKey(conclusion.generating().get().id())) {
@@ -245,11 +245,18 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         return name();
     }
 
-    private static class FullMapSubsumption extends CacheRegister.SubsumptionOperation<Map<Identifier.Variable, Concept>> {
+
+    // TODO Needs a better name
+    private static class IdentifiedConceptsCache extends AnswerCache<Map<Identifier.Variable, Concept>> {
+
+        protected IdentifiedConceptsCache(CacheRegister<Map<Identifier.Variable, Concept>> cacheRegister,
+                                          ConceptMap state, boolean useSubsumption) {
+            super(cacheRegister, state, useSubsumption);
+        }
 
         @Override
-        protected boolean subsumes(Map<Identifier.Variable, Concept> map, ConceptMap contained) {
-            return map.entrySet().containsAll(contained.concepts().entrySet());
+        protected boolean subsumes(Map<Identifier.Variable, Concept> identifiedConcepts, ConceptMap contained) {
+            return identifiedConcepts.entrySet().containsAll(contained.concepts().entrySet());
         }
     }
 
@@ -261,7 +268,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final boolean deduplicate;
 
 
-        public RequestState(Request fromUpstream, CacheRegister<Map<Identifier.Variable, Concept>>.AnswerCache answerCache,
+        public RequestState(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>> answerCache,
                             int iteration, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration);
             this.deduplicate = deduplicate;
@@ -290,7 +297,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
 
         public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {
-            answerCache.recordNewAnswers(materialisations);
+            answerCache.cache(materialisations);
             if (requiresReiteration) answerCache.setRequiresReiteration();
         }
 

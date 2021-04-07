@@ -106,15 +106,15 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         assert fromUpstream.partialAnswer().isRetrievable();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration, new ConceptMapSubsumption()));
+        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
         CacheRegister<ConceptMap> cacheRegister = cacheRegisters.get(root);
-        CacheRegister<ConceptMap>.AnswerCache answerCache;
+        AnswerCache<ConceptMap> answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
-            answerCache = cacheRegister.createAnswerCache(answerFromUpstream, false);
+            answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, false);
             FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
-            answerCache.recordNewAnswers(traversal);
+            answerCache.cache(traversal);
         }
         return new RequestState(fromUpstream, answerCache, iteration);
     }
@@ -129,7 +129,11 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class ConceptMapSubsumption extends CacheRegister.SubsumptionOperation<ConceptMap> {
+    protected static class ConceptMapCache extends AnswerCache<ConceptMap> {
+
+        protected ConceptMapCache(CacheRegister<ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
+            super(cacheRegister, state, useSubsumption);
+        }
 
         @Override
         protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
@@ -139,7 +143,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
-        public RequestState(Request fromUpstream, CacheRegister<ConceptMap>.AnswerCache answerCache, int iteration) {
+        public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration);
         }
 

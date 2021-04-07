@@ -221,10 +221,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected abstract static class CachingRequestState<ANSWER> extends RequestState {
 
         protected final Request fromUpstream;
-        protected final CacheRegister<ANSWER>.AnswerCache answerCache;
+        protected final AnswerCache<ANSWER> answerCache;
         protected int pointer;
 
-        public CachingRequestState(Request fromUpstream, CacheRegister<ANSWER>.AnswerCache answerCache, int iteration) {
+        public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
             this.answerCache = answerCache;
@@ -252,19 +252,17 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         protected abstract Optional<ANSWER> next();
 
-        public CacheRegister<ANSWER>.AnswerCache answerCache() {
+        public AnswerCache<ANSWER> answerCache() {
             return answerCache;
         }
     }
 
     public static class CacheRegister<ANSWER> {
-        HashMap<ConceptMap, AnswerCache> answerCaches;
+        Map<ConceptMap, AnswerCache<ANSWER>> answerCaches;
         private int iteration;
-        private final SubsumptionOperation<ANSWER> subsumption;
 
-        public CacheRegister(int iteration, SubsumptionOperation<ANSWER> subsumption) {
+        public CacheRegister(int iteration) {
             this.iteration = iteration;
-            this.subsumption = subsumption;
             this.answerCaches = new HashMap<>();
         }
 
@@ -282,32 +280,132 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             answerCaches = new HashMap<>();
         }
 
-        public AnswerCache get(ConceptMap fromUpstream) {
+        public AnswerCache<ANSWER> get(ConceptMap fromUpstream) {
             return answerCaches.get(fromUpstream);
         }
 
-        public AnswerCache createAnswerCache(ConceptMap fromUpstream, boolean useSubsumption) {
+        private void register(ConceptMap fromUpstream, AnswerCache<ANSWER> answerCache) {
             assert !answerCaches.containsKey(fromUpstream);
-            Set<ConceptMap> subsumingAnswers;
-            if (useSubsumption) {
-                subsumingAnswers = getSubsumingAnswers(fromUpstream);
-                subsumingAnswers.remove(fromUpstream);
-            } else {
-                subsumingAnswers = set();
-            }
-            AnswerCache newCache = new AnswerCache(fromUpstream, subsumption, subsumingAnswers);
-            answerCaches.put(fromUpstream, newCache);
-            return newCache;
+            answerCaches.put(fromUpstream, answerCache);
+        }
+    }
+
+    // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
+    // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
+    protected static abstract class AnswerCache<ANSWER> {
+
+        private final List<ANSWER> answers;
+        private final Set<ANSWER> answersSet;
+        private final Set<ConceptMap> subsumingCacheKeys;
+        private boolean retrievedFromIncomplete;
+        private boolean requiresReiteration;
+        private FunctionalIterator<ANSWER> unexploredAnswers;
+        private boolean completed;
+        private final CacheRegister<ANSWER> cacheRegister;
+        private final ConceptMap state;
+
+        protected AnswerCache(CacheRegister<ANSWER> cacheRegister, ConceptMap state, boolean useSubsumption) {
+            this.cacheRegister = cacheRegister;
+            this.state = state;
+            this.subsumingCacheKeys = useSubsumption ? getSubsumingCacheKeys(state) : set();
+            this.unexploredAnswers = Iterators.empty();
+            this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
+            this.answersSet = new HashSet<>();
+            this.retrievedFromIncomplete = false;
+            this.requiresReiteration = false;
+            this.completed = false;
+            this.cacheRegister.register(state, this);
         }
 
-        private Set<ConceptMap> getSubsumingAnswers(ConceptMap fromUpstream) {
-            Set<ConceptMap> subsumingAnswers = new HashSet<>();
-            powerSet(fromUpstream.concepts().entrySet()).forEach(s -> {
-                HashMap<Retrievable, Concept> map = new HashMap<>();
-                s.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
-                subsumingAnswers.add(new ConceptMap(map));
-            });
-            return subsumingAnswers;
+        // TODO: cacheIfAbsent?
+        // TODO: Align with the behaviour for adding an iterator to the cache
+        public void cache(ANSWER newAnswer) {
+            if (!isComplete()) addIfAbsent(newAnswer);
+        }
+
+        public void cache(Iterator<ANSWER> newAnswers) {
+            assert !isComplete();
+            unexploredAnswers = unexploredAnswers.link(newAnswers);
+        }
+
+        public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {
+            assert index >= 0;
+            if (index < answers.size()) {
+                return Optional.of(answers.get(index));
+            } else if (index == answers.size()) {
+                if (unexploredAnswers.hasNext()) return addIfAbsent(unexploredAnswers.next()); // TODO: Looks like a bug. If the unexplored has been seen before we want to retry
+                if (!canRecordNewAnswers) retrievedFromIncomplete = true;
+                return Optional.empty();
+            } else {
+                throw GraknException.of(ILLEGAL_STATE);
+            }
+        }
+
+        private Optional<ANSWER> addIfAbsent(ANSWER answer) {
+            if (answersSet.contains(answer)) return Optional.empty();
+            answers.add(answer);
+            answersSet.add(answer);
+            if (retrievedFromIncomplete) this.requiresReiteration = true;
+            return Optional.of(answer);
+        }
+
+        public void setRequiresReiteration() {
+            this.requiresReiteration = true;
+        }
+
+        public void setComplete() {
+            completed = true;
+        }
+
+        public boolean isComplete() {
+            if (completed) return true;
+            Optional<AnswerCache<ANSWER>> subsumingCache;
+            if ((subsumingCache = completeSubsumingCache()).isPresent()) {
+                complete(subsumingCache.get());
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        private Optional<AnswerCache<ANSWER>> completeSubsumingCache() {
+            for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
+                if (cacheRegister.isRegistered(subsumingCacheKey)) {
+                    AnswerCache<ANSWER> subsumingCache;
+                    if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
+                        // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient
+                        return Optional.of(subsumingCache);
+                    }
+                }
+            }
+            return Optional.empty();
+        }
+
+        private void complete(AnswerCache<ANSWER> subsumingCache) {
+            // TODO: This looks like a bug. If the subsuming cache is complete but hasn't iterated over all its
+            //  unexplored answers (can this happen?) then those answers won't be seen.
+            setCompletedAnswers(subsumingCache.answers);
+            setComplete();
+            if (subsumingCache.requiresReiteration()) setRequiresReiteration();
+        }
+
+        private void setCompletedAnswers(List<ANSWER> completeAnswers) {
+            List<ANSWER> subsumingAnswers = iterate(completeAnswers).filter(e -> subsumes(e, state)).toList();
+            subsumingAnswers.forEach(this::addIfAbsent);
+        }
+
+        protected abstract boolean subsumes(ANSWER answer, ConceptMap contained);
+
+        public boolean requiresReiteration() {
+            return requiresReiteration;
+        }
+
+        private static Set<ConceptMap> getSubsumingCacheKeys(ConceptMap fromUpstream) {
+            Set<ConceptMap> subsumingCacheKeys = new HashSet<>();
+            Map<Retrievable, Concept> concepts = new HashMap<>(fromUpstream.concepts()); // TODO: Copying HashMap just to satisfy generics
+            powerSet(concepts.entrySet()).forEach(powerSet -> subsumingCacheKeys.add(toConceptMap(powerSet)));
+            subsumingCacheKeys.remove(fromUpstream);
+            return subsumingCacheKeys;
         }
 
         private static <T> Set<Set<T>> powerSet(Set<T> set) {
@@ -321,107 +419,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return powerSet;
         }
 
-        public static abstract class SubsumptionOperation<ANSWER> {
-            protected abstract boolean subsumes(ANSWER answer, ConceptMap contained);
-        }
-
-        public class AnswerCache {
-
-            private final List<ANSWER> answers;
-            private final Set<ANSWER> answersSet;
-            private final Set<ConceptMap> subsumingAnswers;
-            private boolean retrievedFromIncomplete;
-            private boolean requiresReiteration;
-            private FunctionalIterator<ANSWER> traversal;
-            private boolean completed;
-            private final ConceptMap state;
-            private final SubsumptionOperation<ANSWER> subsumption;
-
-            private AnswerCache(ConceptMap state, SubsumptionOperation<ANSWER> subsumption, Set<ConceptMap> subsumingAnswers) {
-                this.state = state;
-                this.subsumption = subsumption;
-                this.subsumingAnswers = subsumingAnswers;
-                this.traversal = Iterators.empty();
-                this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
-                this.answersSet = new HashSet<>();
-                this.retrievedFromIncomplete = false;
-                this.requiresReiteration = false;
-                this.completed = false;
-            }
-
-            public void recordNewAnswer(ANSWER newAnswer) {
-                if (!complete()) newAnswer(newAnswer);
-            }
-
-            public void recordNewAnswers(Iterator<ANSWER> newAnswers) {
-                if (complete()) throw GraknException.of(ILLEGAL_STATE);
-                traversal = traversal.link(newAnswers);
-            }
-
-            public void setRequiresReiteration() {
-                this.requiresReiteration = true;
-            }
-
-            public void setComplete() {
-                completed = true;
-            }
-
-            public void setComplete(List<ANSWER> completeAnswers) {
-                List<ANSWER> newAnswers = iterate(completeAnswers)
-                        .filter(e -> subsumption.subsumes(e, state))
-                        .filter(e -> !answersSet.contains(e)).toList();
-                this.answers.addAll(newAnswers);
-                this.answersSet.addAll(newAnswers);
-                setComplete();
-            }
-
-            public boolean complete() {
-                if (completed) return true;
-                for (ConceptMap subsumingAnswer : subsumingAnswers) {
-                    if (answerCaches.containsKey(subsumingAnswer)){
-                        AnswerCache subsumingCache;
-                        if ((subsumingCache = answerCaches.get(subsumingAnswer)).complete()) {
-                            setComplete(subsumingCache.answers);
-                            if (subsumingCache.requiresReiteration()) setRequiresReiteration();
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
-
-            public Optional<ANSWER> next(int index, boolean canRecordNewAnswers) {
-                assert index >= 0;
-                if (index < answers.size()) {
-                    return Optional.of(answers.get(index));
-                } else if (index == answers.size()) {
-                    if (traversal.hasNext()) {
-                        ANSWER newAnswer = traversal.next();
-                        boolean isNewAnswer = newAnswer(newAnswer);
-                        if (isNewAnswer) {
-                            return Optional.of(newAnswer);
-                        } else {
-                            return Optional.empty();
-                        }
-                    }
-                    if (!canRecordNewAnswers) retrievedFromIncomplete = true;
-                    return Optional.empty();
-                } else {
-                    throw GraknException.of(ILLEGAL_STATE);
-                }
-            }
-
-            private boolean newAnswer(ANSWER answer) {
-                if (answersSet.contains(answer)) return false;
-                answers.add(answer);
-                answersSet.add(answer);
-                if (retrievedFromIncomplete) this.requiresReiteration = true;
-                return true;
-            }
-
-            public boolean requiresReiteration() {
-                return requiresReiteration;
-            }
+        private static ConceptMap toConceptMap(Set<Map.Entry<Retrievable, Concept>> conceptsEntrySet) {
+            HashMap<Retrievable, Concept> map = new HashMap<>();
+            conceptsEntrySet.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
+            return new ConceptMap(map);
         }
     }
 

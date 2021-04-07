@@ -300,7 +300,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         private boolean retrievedFromIncomplete;
         private boolean requiresReiteration;
         private FunctionalIterator<ANSWER> unexploredAnswers;
-        private boolean completed;
+        private boolean complete;
         private final CacheRegister<ANSWER> cacheRegister;
         private final ConceptMap state;
 
@@ -313,7 +313,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             this.answersSet = new HashSet<>();
             this.retrievedFromIncomplete = false;
             this.requiresReiteration = false;
-            this.completed = false;
+            this.complete = false;
             this.cacheRegister.register(state, this);
         }
 
@@ -354,14 +354,15 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         public void setComplete() {
-            completed = true;
+            assert !unexploredAnswers.hasNext();
+            complete = true;
         }
 
         public boolean isComplete() {
-            if (completed) return true;
+            if (complete) return true;
             Optional<AnswerCache<ANSWER>> subsumingCache;
             if ((subsumingCache = completeSubsumingCache()).isPresent()) {
-                complete(subsumingCache.get());
+                completeFromSubsumer(subsumingCache.get());
                 return true;
             } else {
                 return false;
@@ -381,11 +382,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return Optional.empty();
         }
 
-        private void complete(AnswerCache<ANSWER> subsumingCache) {
-            // TODO: This looks like a bug. If the subsuming cache is complete but hasn't iterated over all its
-            //  unexplored answers (can this happen?) then those answers won't be seen.
+        private void completeFromSubsumer(AnswerCache<ANSWER> subsumingCache) {
             setCompletedAnswers(subsumingCache.answers);
-            setComplete();
+            complete = true;
+            unexploredAnswers = Iterators.empty();
             if (subsumingCache.requiresReiteration()) setRequiresReiteration();
         }
 

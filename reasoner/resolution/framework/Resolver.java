@@ -333,7 +333,10 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             if (index < answers.size()) {
                 return Optional.of(answers.get(index));
             } else if (index == answers.size()) {
-                if (unexploredAnswers.hasNext()) return addIfAbsent(unexploredAnswers.next()); // TODO: Looks like a bug. If the unexplored has been seen before we want to retry
+                while (unexploredAnswers.hasNext()) {
+                    Optional<ANSWER> nextAnswer = addIfAbsent(unexploredAnswers.next());
+                    if (nextAnswer.isPresent()) return nextAnswer;
+                }
                 if (!canRecordNewAnswers) retrievedFromIncomplete = true;
                 return Optional.empty();
             } else {

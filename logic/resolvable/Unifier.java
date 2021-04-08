@@ -19,17 +19,22 @@ package grakn.core.logic.resolvable;
 
 import grakn.common.collection.Pair;
 import grakn.core.common.exception.GraknException;
+import grakn.core.common.iterator.FunctionalIterator;
+import grakn.core.common.iterator.Iterators;
 import grakn.core.common.parameters.Label;
 import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.concept.thing.Attribute;
 import grakn.core.concept.type.ThingType;
+import grakn.core.concept.type.Type;
 import grakn.core.traversal.common.Identifier.Variable;
 import grakn.core.traversal.common.Identifier.Variable.Retrievable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -39,6 +44,7 @@ import java.util.stream.Collectors;
 
 import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Reasoner.REVERSE_UNIFICATION_MISSING_CONCEPT;
+import static grakn.core.common.iterator.Iterators.iterate;
 
 public class Unifier {
 
@@ -110,8 +116,28 @@ public class Unifier {
             }
         }
 
-        if (instanceRequirements.satisfiedBy(reversedConcepts)) return Optional.of(new ConceptMap(reversedConcepts));
+        if (instanceRequirements.satisfiedBy(reversedConcepts)) return Optional.of(new ConceptMap(reversedConcepts)); //cartesianNamedTypes(reversedConcepts);
         else return Optional.empty();
+    }
+
+    private FunctionalIterator<ConceptMap> cartesianNamedTypes(Map<Retrievable, Concept> initialConcepts) {
+        Map<Retrievable, Concept> fixedConcepts = new HashMap<>();
+        List<Variable.Name> namedTypeNames = new ArrayList<>();
+        List<FunctionalIterator<Type>> namedTypeSupers = new ArrayList<>();
+        initialConcepts.forEach((id, concept) -> {
+            if (id.isName() && concept.isType()) {
+                namedTypeNames.add(id.asName());
+                namedTypeSupers.add(iterate(concept.asType().getSupertypes().iterator()).map(t -> t));
+            } else fixedConcepts.put(id, concept);
+        });
+
+        return Iterators.cartesian(namedTypeSupers).map(permutation -> {
+            Map<Retrievable, Concept> concepts = new HashMap<>(fixedConcepts);
+            for (int i = 0; i < permutation.size(); i++) {
+                concepts.put(namedTypeNames.get(i), permutation.get(i));
+            }
+            return new ConceptMap(concepts);
+        });
     }
 
     public Map<Retrievable, Set<Variable>> mapping() {

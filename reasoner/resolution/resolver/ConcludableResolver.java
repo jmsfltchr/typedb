@@ -29,6 +29,7 @@ import grakn.core.logic.resolvable.Unifier;
 import grakn.core.pattern.Conjunction;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -320,8 +322,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         private final boolean deduplicate;
 
         public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration,
-                            boolean singleAnswerRequired, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration);
+                            boolean singleAnswerRequired, boolean deduplicate, boolean mayCauseReiteration) {
+            super(fromUpstream, answerCache, iteration, mayCauseReiteration);
             this.singleAnswerRequired = singleAnswerRequired;
             this.deduplicate = deduplicate;
             this.producedRecorder = new ProducedRecorder();
@@ -376,13 +378,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public RuleExplorationRequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache,
                                            int iteration, boolean singleAnswerRequired, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
+            super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate, false);
             this.downstreamManager = new DownstreamManager();
-        }
-
-        @Override
-        protected Optional<ConceptMap> next() {
-            return answerCache.next(pointer, false);
         }
 
         @Override
@@ -409,12 +406,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public RetrievalRequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache,
                                      int iteration, boolean singleAnswerRequired, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
-        }
-
-        @Override
-        protected Optional<ConceptMap> next() {
-            return answerCache.next(pointer, true);
+            super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate, true);
         }
 
         @Override
@@ -473,4 +465,3 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 }
-

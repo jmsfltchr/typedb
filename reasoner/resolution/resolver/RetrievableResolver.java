@@ -25,6 +25,7 @@ import grakn.core.concurrent.actor.Actor;
 import grakn.core.logic.resolvable.Retrievable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -144,7 +145,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
     private static class RequestState extends CachingRequestState<ConceptMap> {
 
         public RequestState(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration) {
-            super(fromUpstream, answerCache, iteration);
+            super(fromUpstream, answerCache, iteration, true); // TODO do we want this to cause reiteration?
         }
 
         @Override
@@ -160,9 +161,5 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             return false;
         }
 
-        @Override
-        protected Optional<ConceptMap> next() {
-            return answerCache.next(pointer, true);
-        }
     }
 }

@@ -26,6 +26,7 @@ import grakn.core.concurrent.actor.Actor;
 import grakn.core.logic.Rule;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -36,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -270,7 +272,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         public RequestState(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>> answerCache,
                             int iteration, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration);
+            super(fromUpstream, answerCache, iteration, false);
             this.deduplicate = deduplicate;
             this.materialisedAnswers = new LinkedList<>();
             this.downstreamManager = new DownstreamManager();
@@ -299,11 +301,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {
             answerCache.cache(materialisations);
             if (requiresReiteration) answerCache.setRequiresReiteration();
-        }
-
-        @Override
-        protected Optional<Map<Identifier.Variable, Concept>> next() {
-            return answerCache.next(pointer, false);
         }
 
         public void addExplainAnswers(FunctionalIterator<Partial.Concludable<?>> materialisations) {

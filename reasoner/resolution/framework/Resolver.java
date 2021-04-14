@@ -22,6 +22,7 @@ import grakn.common.collection.Either;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
+import grakn.core.common.poller.Poller;
 import grakn.core.concept.Concept;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
@@ -40,13 +41,11 @@ import grakn.core.traversal.common.Identifier.Variable.Retrievable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -210,25 +209,22 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         protected final Request fromUpstream;
         protected final AnswerCache<ANSWER> answerCache;
         protected final boolean mayCauseReiteration;
-        protected Iterator<? extends Partial<?>> iterator;
+        protected Poller<? extends Partial<?>> cacheReader;
 
         public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration, boolean mayCauseReiteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
             this.answerCache = answerCache;
             this.mayCauseReiteration = mayCauseReiteration;
-            this.iterator = answerCache.iterator(mayCauseReiteration)
-                    .map(answer -> toUpstream(answer).filter(partial -> !optionallyDeduplicate(partial.conceptMap())))
-                    .filter(Optional::isPresent)
-                    .map(Optional::get);
+            this.cacheReader = answerCache.reader(mayCauseReiteration)
+                    .flatMap(answer -> toUpstream(answer).filter(partial -> !optionallyDeduplicate(partial.conceptMap())));
         }
 
         public Optional<? extends Partial<?>> nextAnswer() {
-            if (iterator.hasNext()) return Optional.of(iterator.next());
-            else return Optional.empty();
+            return cacheReader.poll();
         }
 
-        protected abstract Optional<? extends Partial<?>> toUpstream(ANSWER conceptMap);
+        protected abstract FunctionalIterator<? extends Partial<?>> toUpstream(ANSWER conceptMap);
 
         protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
 
@@ -236,6 +232,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return answerCache;
         }
     }
+
+    // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
+    // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
 
     public static class CacheRegister<ANSWER> {
         Map<ConceptMap, AnswerCache<ANSWER>> answerCaches;
@@ -269,9 +268,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             answerCaches.put(fromUpstream, answerCache);
         }
     }
-
-    // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
-    // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
 
     public static class ProducedRecorder {
         private final Set<ConceptMap> produced;

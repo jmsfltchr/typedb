@@ -98,9 +98,9 @@ public class Unifier {
      * Un-unify a map of concepts, with given identifiers. These must include anonymous and labelled concepts,
      * as they may be mapped to from a named variable, and may have requirements that need to be met.
      */
-    public Optional<ConceptMap> unUnify(Map<Variable, Concept> concepts, Requirements.Instance instanceRequirements) {
+    public FunctionalIterator<ConceptMap> unUnify(Map<Variable, Concept> concepts, Requirements.Instance instanceRequirements) {
 
-        if (!unifiedRequirements.exactlySatisfiedBy(concepts)) return Optional.empty();
+        if (!unifiedRequirements.exactlySatisfiedBy(concepts)) return Iterators.empty();
 
         Map<Retrievable, Concept> reversedConcepts = new HashMap<>();
         for (Map.Entry<Variable, Set<Retrievable>> entry : reverseUnifier.entrySet()) {
@@ -112,12 +112,12 @@ public class Unifier {
             Concept concept = concepts.get(toReverse);
             for (Retrievable r : reversed) {
                 if (!reversedConcepts.containsKey(r)) reversedConcepts.put(r, concept);
-                if (!reversedConcepts.get(r).equals(concept)) return Optional.empty();
+                if (!reversedConcepts.get(r).equals(concept)) return Iterators.empty();
             }
         }
 
-        if (instanceRequirements.satisfiedBy(reversedConcepts)) return Optional.of(new ConceptMap(reversedConcepts)); //cartesianNamedTypes(reversedConcepts);
-        else return Optional.empty();
+        if (instanceRequirements.satisfiedBy(reversedConcepts)) return cartesianNamedTypes(reversedConcepts);
+        else return Iterators.empty();
     }
 
     private FunctionalIterator<ConceptMap> cartesianNamedTypes(Map<Retrievable, Concept> initialConcepts) {
@@ -131,13 +131,17 @@ public class Unifier {
             } else fixedConcepts.put(id, concept);
         });
 
-        return Iterators.cartesian(namedTypeSupers).map(permutation -> {
-            Map<Retrievable, Concept> concepts = new HashMap<>(fixedConcepts);
-            for (int i = 0; i < permutation.size(); i++) {
-                concepts.put(namedTypeNames.get(i), permutation.get(i));
-            }
-            return new ConceptMap(concepts);
-        });
+        if (namedTypeNames.isEmpty()) {
+            return Iterators.single(new ConceptMap(fixedConcepts));
+        } else {
+            return Iterators.cartesian(namedTypeSupers).map(permutation -> {
+                Map<Retrievable, Concept> concepts = new HashMap<>(fixedConcepts);
+                for (int i = 0; i < permutation.size(); i++) {
+                    concepts.put(namedTypeNames.get(i), permutation.get(i));
+                }
+                return new ConceptMap(concepts);
+            });
+        }
     }
 
     public Map<Retrievable, Set<Variable>> mapping() {

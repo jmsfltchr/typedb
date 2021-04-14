@@ -19,6 +19,7 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
+import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.concurrent.actor.Actor;
@@ -149,11 +150,11 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
 
         @Override
-        protected Optional<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Retrievable<?> retrievable = fromUpstream.partialAnswer().asRetrievable();
             Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(conceptMap);
             if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
-            return Optional.of(upstreamAnswer);
+            return Iterators.single(upstreamAnswer);
         }
 
         @Override

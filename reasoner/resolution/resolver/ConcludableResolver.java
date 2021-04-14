@@ -20,6 +20,7 @@ package grakn.core.reasoner.resolution.resolver;
 
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
+import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.concurrent.actor.Actor;
@@ -336,7 +337,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
 
         @Override
-        protected Optional<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
             Partial.Compound<?, ?> upstreamAnswer;
             if (partial.isMatch()) {
@@ -348,7 +349,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 throw GraknException.of(ILLEGAL_STATE);
             }
             if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
-            return Optional.of(upstreamAnswer);
+            return Iterators.single(upstreamAnswer);
         }
 
         public boolean isExploration() {

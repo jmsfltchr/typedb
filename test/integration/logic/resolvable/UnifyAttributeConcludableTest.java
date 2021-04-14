@@ -18,6 +18,7 @@
 
 package grakn.core.logic.resolvable;
 
+import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
 import grakn.core.common.parameters.Arguments;
 import grakn.core.common.parameters.Options.Database;
@@ -151,15 +152,15 @@ public class UnifyAttributeConcludableTest {
         Map<Identifier.Variable, Concept> concepts = map(
                 pair(Identifier.Variable.anon(0), instanceOf("first-name", "john"))
         );
-        Optional<ConceptMap> unified = unifier.unUnify(concepts, new Unifier.Requirements.Instance(map()));
-        assertTrue(unified.isPresent());
-        assertEquals(1, unified.get().concepts().size());
+        FunctionalIterator<ConceptMap> unified = unifier.unUnify(concepts, new Unifier.Requirements.Instance(map()));
+        assertTrue(unified.hasNext());
+        assertEquals(1, unified.next().concepts().size());
 
         concepts = map(
                 pair(Identifier.Variable.anon(0), instanceOf("first-name", "abe"))
         );
         unified = unifier.unUnify(concepts, new Unifier.Requirements.Instance(map()));
-        assertFalse(unified.isPresent());
+        assertFalse(unified.hasNext());
 
     }
 

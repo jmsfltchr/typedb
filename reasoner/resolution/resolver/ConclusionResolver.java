@@ -97,9 +97,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                     .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
             FunctionalIterator<Partial.Concludable<?>> materialisedAnswers = materialisations
-                    .map(concepts -> fromDownstream.answer().asConclusion().aggregateToUpstream(concepts))
-                    .filter(Optional::isPresent)
-                    .map(Optional::get);
+                    .flatMap(concepts -> fromDownstream.answer().asConclusion().aggregateToUpstream(concepts))
+                    .map(Partial.Concludable::asConcludable); // TODO can we get rid of the cast
             requestState.addExplainAnswers(materialisedAnswers);
 
             Optional<Partial.Concludable<?>> nextAnswer;
@@ -284,7 +283,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
 
         @Override
-        protected Optional<? extends Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
             Partial.Conclusion<?, ?> conclusion = fromUpstream.partialAnswer().asConclusion();
             return  conclusion.aggregateToUpstream(answer).map(p -> {
                 if (answerCache.requiresReiteration()) p.setRequiresReiteration();

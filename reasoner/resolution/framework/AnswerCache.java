@@ -21,6 +21,8 @@ package grakn.core.reasoner.resolution.framework;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
+import grakn.core.common.poller.AbstractPoller;
+import grakn.core.common.poller.Poller;
 import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.traversal.common.Identifier;
@@ -30,7 +32,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
@@ -92,39 +93,26 @@ public abstract class AnswerCache<ANSWER> {
         }
     }
 
-    public FunctionalIterator<ANSWER> iterator(boolean mayCauseReiteration) {
-        return iterate(new Iterator(mayCauseReiteration));
+    public Poller<ANSWER> reader(boolean mayCauseReiteration) {
+        return new Reader(mayCauseReiteration);
     }
 
-    public class Iterator implements java.util.Iterator<ANSWER> {
+    public class Reader extends AbstractPoller<ANSWER> {
 
         private final boolean mayCauseReiteration;
         private ANSWER next;
         private int index;
 
-        public Iterator(boolean mayCauseReiteration) {
+        public Reader(boolean mayCauseReiteration) {
             this.mayCauseReiteration = mayCauseReiteration;
             index = 0;
         }
 
         @Override
-        public boolean hasNext() {
-            if (next == null) tryFetch();
-            return next != null;
-        }
-
-        private void tryFetch() {
+        public Optional<ANSWER> poll() {
             Optional<ANSWER> nextAnswer = get(index, mayCauseReiteration);
-            nextAnswer.ifPresent(ans -> next = ans);
-        }
-
-        @Override
-        public ANSWER next() {
-            if (!hasNext()) throw new NoSuchElementException();
-            index++;
-            ANSWER ans = next;
-            next = null;
-            return ans;
+            if (nextAnswer.isPresent()) index++;
+            return nextAnswer;
         }
 
     }

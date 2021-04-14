@@ -18,6 +18,7 @@
 package grakn.core.reasoner.resolution.answer;
 
 import grakn.core.common.exception.GraknException;
+import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.concurrent.actor.Actor;
@@ -171,7 +172,7 @@ public interface AnswerState {
             throw GraknException.of(INVALID_CASTING, className(this.getClass()), className(Concludable.class));
         }
 
-        default Conclusion<?, ?> asConclusion() {
+        default Conclusion<?, ? extends Concludable<?>> asConclusion() {
             throw GraknException.of(INVALID_CASTING, className(this.getClass()), className(Conclusion.class));
         }
 
@@ -384,7 +385,7 @@ public interface AnswerState {
 
             Unifier.Requirements.Instance instanceRequirements();
 
-            Optional<? extends PRNT> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
+            FunctionalIterator<? extends PRNT> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
 
             SLF extend(ConceptMap ans);
 
@@ -394,7 +395,7 @@ public interface AnswerState {
             default boolean isConclusion() { return true; }
 
             @Override
-            default Conclusion<?, ?> asConclusion() { return this; }
+            default Conclusion<?, PRNT> asConclusion() { return this; }
 
             default boolean isMatch() { return false; }
 
@@ -407,7 +408,7 @@ public interface AnswerState {
             interface Match extends Conclusion<Match, Concludable.Match<?>>, Explainable {
 
                 @Override
-                Optional<Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
+                FunctionalIterator<? extends Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
 
                 Match with(ConceptMap extension, boolean requiresReiteration);
 
@@ -429,7 +430,7 @@ public interface AnswerState {
                 Explain with(ConceptMap conditionAnswer, boolean requiresReiteration);
 
                 @Override
-                Optional<Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
+                FunctionalIterator<? extends Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
 
                 @Override
                 Compound.Condition.Explain toDownstream(Set<Identifier.Variable.Retrievable> filter);

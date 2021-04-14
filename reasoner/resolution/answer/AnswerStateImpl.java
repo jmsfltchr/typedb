@@ -19,6 +19,7 @@ package grakn.core.reasoner.resolution.answer;
 
 import grakn.common.collection.Pair;
 import grakn.core.common.exception.GraknException;
+import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.concurrent.actor.Actor;
@@ -839,8 +840,8 @@ public abstract class AnswerStateImpl implements AnswerState {
                 }
 
                 @Override
-                public Optional<Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
-                    Optional<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
+                public FunctionalIterator<? extends Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
+                    FunctionalIterator<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
                     return unUnified.map(ans -> parent().with(ans, requiresReiteration()));
                 }
 
@@ -907,11 +908,11 @@ public abstract class AnswerStateImpl implements AnswerState {
                 }
 
                 @Override
-                public Optional<Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
-                    Optional<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
-                    return unUnified.map(ans -> {
-                        return parent().with(ans, requiresReiteration(), rule(), toConceptMap(concepts), unifier(), conditionAnswer());
-                    });
+                public FunctionalIterator<? extends Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
+                    FunctionalIterator<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
+                    return unUnified.map(ans ->
+                         parent().with(ans, requiresReiteration(), rule(), toConceptMap(concepts), unifier(), conditionAnswer())
+                    );
                 }
 
                 private ConceptMap toConceptMap(Map<Identifier.Variable, Concept> concepts) {

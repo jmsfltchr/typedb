@@ -116,18 +116,19 @@ public class Unifier {
             }
         }
 
-        if (instanceRequirements.satisfiedBy(reversedConcepts)) return cartesianNamedTypes(reversedConcepts);
+        if (instanceRequirements.satisfiedBy(reversedConcepts)) return cartesianUnrestrictedNamedTypes(reversedConcepts, instanceRequirements);
         else return Iterators.empty();
     }
 
-    private FunctionalIterator<ConceptMap> cartesianNamedTypes(Map<Retrievable, Concept> initialConcepts) {
+    private FunctionalIterator<ConceptMap> cartesianUnrestrictedNamedTypes(Map<Retrievable, Concept> initialConcepts,
+                                                                           Requirements.Instance instanceRequirements) {
         Map<Retrievable, Concept> fixedConcepts = new HashMap<>();
         List<Variable.Name> namedTypeNames = new ArrayList<>();
         List<FunctionalIterator<Type>> namedTypeSupers = new ArrayList<>();
         initialConcepts.forEach((id, concept) -> {
-            if (id.isName() && concept.isType()) {
+            if (id.isName() && concept.isType() && !instanceRequirements.hasRestriction(id)) {
                 namedTypeNames.add(id.asName());
-                namedTypeSupers.add(iterate(concept.asType().getSupertypes().iterator()).map(t -> t));
+                namedTypeSupers.add(concept.asType().getSupertypes().map(t -> t));
             } else fixedConcepts.put(id, concept);
         });
 
@@ -362,6 +363,10 @@ public class Unifier {
                     }
                 }
                 return true;
+            }
+
+            public boolean hasRestriction(Retrievable var) {
+                return requireCompatible.containsKey(var);
             }
 
             @Override

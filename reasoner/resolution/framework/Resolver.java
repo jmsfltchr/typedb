@@ -102,7 +102,7 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     protected abstract void receiveFail(Response.Fail fromDownstream, int iteration);
 
     public void terminate(Throwable cause) {
-        LOG.error("error", cause);
+        LOG.debug("Resolver terminated. ", cause);
         this.terminated = true;
     }
 

@@ -51,9 +51,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static grakn.common.collection.Collections.list;
@@ -61,6 +61,7 @@ import static grakn.common.collection.Collections.map;
 import static grakn.common.collection.Collections.pair;
 import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
+import static grakn.core.common.iterator.Iterators.iterate;
 import static grakn.core.logic.resolvable.Util.createRule;
 import static grakn.core.logic.resolvable.Util.getStringMapping;
 import static grakn.core.logic.resolvable.Util.resolvedConjunction;
@@ -507,7 +508,7 @@ public class UnifyRelationConcludableTest {
                                "($employee: $x, $employee: $y) isa $employment", logicMgr);
 
         List<Unifier> unifiers = queryConcludable.unify(rule.conclusion(), conceptMgr).toList();
-        Set<Map<String, Set<String>>> result = Iterators.iterate(unifiers).map(u -> getStringMapping(u.mapping())).toSet();
+        Set<Map<String, Set<String>>> result = iterate(unifiers).map(u -> getStringMapping(u.mapping())).toSet();
 
         Set<Map<String, Set<String>>> expected = set(
                 new HashMap<String, Set<String>>() {{
@@ -575,7 +576,7 @@ public class UnifyRelationConcludableTest {
                                "(employee: $x, employer: $x, employee: $y) isa employment", logicMgr);
 
         List<Unifier> unifier = queryConcludable.unify(rule.conclusion(), conceptMgr).toList();
-        List<Map<String, Set<String>>> result = Iterators.iterate(unifier).map(u -> getStringMapping(u.mapping())).toList();
+        List<Map<String, Set<String>>> result = iterate(unifier).map(u -> getStringMapping(u.mapping())).toList();
 
         List<Map<String, Set<String>>> expected = list(
                 new HashMap<String, Set<String>>() {{
@@ -711,7 +712,7 @@ public class UnifyRelationConcludableTest {
                                "($employee: $x, $employee: $x) isa $employment", logicMgr);
 
         List<Unifier> unifiers = queryConcludable.unify(rule.conclusion(), conceptMgr).toList();
-        Set<Map<String, Set<String>>> result = Iterators.iterate(unifiers).map(u -> getStringMapping(u.mapping())).toSet();
+        Set<Map<String, Set<String>>> result = iterate(unifiers).map(u -> getStringMapping(u.mapping())).toSet();
 
         Set<Map<String, Set<String>>> expected = set(
                 new HashMap<String, Set<String>>() {{
@@ -792,6 +793,119 @@ public class UnifyRelationConcludableTest {
         assertEquals(expected, result);
     }
 
+    @Test
+    public void unUnify_produces_cartesian_named_types() {
+        String conjunction = "{$r ($role: $x) isa $rel;}";
+        Set<Concludable> concludables = Concludable.create(resolvedConjunction(conjunction, logicMgr));
+        Concludable.Relation queryConcludable = concludables.iterator().next().asRelation();
+
+        Rule rule = createRule("people-are-self-friends", "{ $x isa person; }",
+                               " (friend: $x) isa friendship ", logicMgr);
+
+        List<Unifier> unifiers = queryConcludable.unify(rule.conclusion(), conceptMgr).toList();
+        assertEquals(1, unifiers.size());
+        Unifier unifier = unifiers.get(0);
+
+        // test filter allows a valid answer
+        Relation friendship = instanceOf("friendship").asRelation();
+        Thing person = instanceOf("person");
+        addRolePlayer(friendship, "friend", person);
+        Map<Identifier.Variable, Concept> concepts = map(
+                pair(Identifier.Variable.anon(0), friendship),
+                pair(Identifier.Variable.name("x"), person),
+                pair(Identifier.Variable.label("friendship"), friendship.getType()),
+                pair(Identifier.Variable.label("friendship:friend"), friendship.getType().getRelates("friend"))
+        );
+        List<ConceptMap> unified = unifier.unUnify(concepts, new Unifier.Requirements.Instance(map())).toList();
+        assertEquals(6, unified.size());
+
+        Set<Map<String, String>> expected = set(
+                new HashMap<String, String>() {{
+                    put("$rel", "friendship");
+                    put("$role", "friendship:friend");
+                }},
+                new HashMap<String, String>() {{
+                    put("$rel", "friendship");
+                    put("$role", "relation:role");
+                }},
+                new HashMap<String, String>() {{
+                    put("$rel", "relation");
+                    put("$role", "friendship:friend");
+                }},
+                new HashMap<String, String>() {{
+                    put("$rel", "relation");
+                    put("$role", "relation:role");
+                }},
+                new HashMap<String, String>() {{
+                    put("$rel", "thing");
+                    put("$role", "friendship:friend");
+                }},
+                new HashMap<String, String>() {{
+                    put("$rel", "thing");
+                    put("$role", "relation:role");
+                }}
+        );
+
+        Set<Map<String, String>> actual = new HashSet<>();
+        iterate(unified).forEachRemaining(answer -> {
+            actual.add(new HashMap<String, String>() {{
+                put("$rel", answer.get("rel").asType().getLabel().name());
+                put("$role", answer.get("role").asType().getLabel().scopedName());
+            }});
+        });
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void unUnify_produces_cartesian_named_types_only_for_unbound_vars() {
+        String conjunction = "{$r ($role: $x) isa $rel;}";
+        Set<Concludable> concludables = Concludable.create(resolvedConjunction(conjunction, logicMgr));
+        Concludable.Relation queryConcludable = concludables.iterator().next().asRelation();
+
+        Rule rule = createRule("people-are-self-friends", "{ $x isa person; }",
+                               " (friend: $x) isa friendship ", logicMgr);
+
+        List<Unifier> unifiers = queryConcludable.unify(rule.conclusion(), conceptMgr).toList();
+        assertEquals(1, unifiers.size());
+        Unifier unifier = unifiers.get(0);
+
+        // test filter allows a valid answer
+        Relation friendship = instanceOf("friendship").asRelation();
+        Thing person = instanceOf("person");
+        addRolePlayer(friendship, "friend", person);
+        Map<Identifier.Variable, Concept> concepts = map(
+                pair(Identifier.Variable.anon(0), friendship),
+                pair(Identifier.Variable.name("x"), person),
+                pair(Identifier.Variable.label("friendship"), friendship.getType()),
+                pair(Identifier.Variable.label("friendship:friend"), friendship.getType().getRelates("friend"))
+        );
+        List<ConceptMap> unified = unifier.unUnify(concepts, new Unifier.Requirements.Instance(map(
+                pair(Identifier.Variable.name("rel"), friendship.getType())
+        ))).toList();
+        assertEquals(2, unified.size());
+
+        Set<Map<String, String>> expected = set(
+                new HashMap<String, String>() {{
+                    put("$rel", "friendship");
+                    put("$role", "friendship:friend");
+                }},
+                new HashMap<String, String>() {{
+                    put("$rel", "friendship");
+                    put("$role", "relation:role");
+                }}
+        );
+
+        Set<Map<String, String>> actual = new HashSet<>();
+        iterate(unified).forEachRemaining(answer -> {
+            actual.add(new HashMap<String, String>() {{
+                put("$rel", answer.get("rel").asType().getLabel().name());
+                put("$role", answer.get("role").asType().getLabel().scopedName());
+            }});
+        });
+
+        assertEquals(expected, actual);
+    }
 
     // TODO: rule unification pruning tests based based on types
 }

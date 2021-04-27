@@ -35,6 +35,9 @@ import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
+import grakn.core.reasoner.resolution.resolver.RequestStateMachine.Exploration;
+import grakn.core.reasoner.resolution.resolver.RequestStateMachine.Exploration.SearchDownstream;
+import grakn.core.reasoner.resolution.resolver.RequestStateMachineImpl.ExplorationRequestStateMachineImpl;
 import grakn.core.traversal.TraversalEngine;
 import grakn.core.traversal.common.Identifier;
 import org.slf4j.Logger;
@@ -42,11 +45,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static grakn.common.util.Objects.className;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
@@ -87,14 +91,16 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (!isInitialised) initialiseDownstreamResolvers();
         if (isTerminated()) return;
 
-        RequestState requestState = getOrReplaceRequestState(fromUpstream, iteration);
-        if (iteration < requestState.iteration()) {
-            // short circuit if the request came from a prior iteration
-            failToUpstream(fromUpstream, iteration);
-        } else {
-            assert iteration == requestState.iteration();
-            nextAnswer(fromUpstream, requestState, iteration);
-        }
+//        ExplorationState requestState = getOrReplaceRequestState(fromUpstream, iteration);
+        // TODO: Move this to getOrReplaceRequestState, just here to try the UX for now
+        Consumer<ConceptMap> onSendUpstream = (answer) -> answerToUpstream(answer, fromUpstream, iteration);
+        Supplier<Void> onFail = () -> { failToUpstream(fromUpstream, iteration); return null; };
+        Consumer<Request> onSearchDownstream = (nextDownstream) -> requestFromDownstream(nextDownstream, fromUpstream, iteration);
+
+        Exploration requestStateMachine = new ExplorationRequestStateMachineImpl(fromUpstream, iteration, answerCache, new DownstreamManager(),
+                                                                                 onSendUpstream, onFail, onSearchDownstream);
+        requestStateMachine.receivedIteration(iteration);
+        requestStateMachine.proceed();
     }
 
     @Override
@@ -251,7 +257,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             return new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
         } else {
             assert fromUpstream.partialAnswer().isConcludable();
-            AnswerCache<ConceptMap> answerCache =  new ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
+            AnswerCache<ConceptMap> answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
             if (!answerCache.isComplete()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 answerCache.cache(traversal);

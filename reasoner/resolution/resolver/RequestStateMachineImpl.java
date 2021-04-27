@@ -1,30 +1,42 @@
 package grakn.core.reasoner.resolution.resolver;
 
+import grakn.core.common.exception.GraknException;
 import grakn.core.common.poller.Poller;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
+import grakn.core.reasoner.resolution.framework.Resolver;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+import static grakn.common.collection.Collections.set;
+import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 
 public abstract class RequestStateMachineImpl implements RequestStateMachine {
 
     private final Request fromUpstream;
     private final int iteration;
+    protected int receivedIteration;
     private final State.Waiting waiting;
     private final State.Failed failed;
-//    protected final Consumer<ConceptMap> onSendUpstream; // TODO:
+    private final Set<State> terminationStates;
+    protected final Consumer<ConceptMap> onSendUpstream; // TODO
+    protected final Supplier<Void> onFail; // TODO
     private State state;
 
-    RequestStateMachineImpl(Request fromUpstream, int iteration) {
+    RequestStateMachineImpl(Request fromUpstream, int iteration, Consumer<ConceptMap> onSendUpstream, Supplier<Void> onFail) {
         this.fromUpstream = fromUpstream;
         this.iteration = iteration;
+        this.onSendUpstream = onSendUpstream;
+        this.onFail = onFail;
         this.waiting = new WaitingImpl();
         this.failed = new FailedImpl();
         this.state = this.waiting; // Initial state is Waiting
+        this.terminationStates = set(this.waiting, this.failed);
     }
 
     public Request fromUpstream() { return fromUpstream; }
@@ -33,60 +45,61 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
 
     public State state() { return state; }
 
-    public State receiveRequest(int requestIteration) {
-        assert state == waiting;
-        progressStates(waiting.receiveRequest(requestIteration));
-        return state;
+    public void receivedIteration(int receivedIteration) {
+        this.receivedIteration = receivedIteration;
     }
 
-    private void progressStates(State s) {
+    public void proceed() {
+        State s = state;
         do {
-            state = ((State.AutoState) s).nextState(); // TODO: Remove cast
-        } while (state instanceof State.AutoState);
+            state = s.nextState();
+        } while (!terminationStates.contains(state));
     }
 
     // State getters
-    private State.Waiting waiting() { return waiting; }
+    protected State.Waiting waiting() { return waiting; }
 
-    protected abstract State.AutoState.FindAnswer findAnswer();
+    protected abstract State.FindAnswer findAnswer();
 
-    private State.Failed failed() { return failed; }
+    protected State.Failed failed() { return failed; }
 
     // States
-    public class FailedImpl implements State.Failed {}
+    public class FailedImpl implements State.Failed {
+
+        @Override
+        public NextStateFor nextState() {
+            // TODO: How to automatically fail to upstream if in the failed state?
+            throw GraknException.of(ILLEGAL_STATE);
+        }
+
+    }
 
     public class WaitingImpl implements State.Waiting {
-        public NextStateFor.Waiting.Request receiveRequest(int requestIter) {
-            if (iteration < requestIter) return failed();
+
+        @Override
+        public NextStateFor nextState() {
+            if (iteration < receivedIteration) return failed();
             return findAnswer();
         }
 
-        @Override
-        public NextStateFor.Waiting.Answer receiveAnswer(int requestIter) {
-            throw new NotImplementedException(); // TODO
-        }
-
-        @Override
-        public NextStateFor.Waiting.Fail receiveFail(int requestIter) {
-            throw new NotImplementedException(); // TODO
-        }
     }
 
-    public class RetrievalRequestStateMachineImpl extends RequestStateMachineImpl implements RequestStateMachine.Retrieval {
+    public static class RetrievalRequestStateMachineImpl extends RequestStateMachineImpl implements RequestStateMachine.Retrieval {
 
         private final FindAnswer findAnswer;
         private final AnswerCache<ConceptMap> answerCache;
         private final Poller<ConceptMap> answerPoller;
 
-        RetrievalRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap> answerCache) {
-            super(fromUpstream, iteration);
+        RetrievalRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap> answerCache,
+                                         Consumer<ConceptMap> onSendUpstream, Supplier<Void> onFail) {
+            super(fromUpstream, iteration, onSendUpstream, onFail);
             this.answerCache = answerCache;
             this.answerPoller = this.answerCache.reader(true); // TODO: Check the usage of this flag
             this.findAnswer = new RetrievalFindAnswerImpl();
         }
 
         @Override
-        public State.AutoState.FindAnswer findAnswer() { return findAnswer; }
+        public State.FindAnswer findAnswer() { return findAnswer; }
 
         public class RetrievalFindAnswerImpl implements FindAnswer {
 
@@ -94,27 +107,32 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
             public NextStateFor.Retrieval.FindAnswer nextState() { // TODO Add generic answer type
                 Optional<ConceptMap> answer = answerPoller.poll();
                 if (answer.isPresent()) {
-                    // sendRequestUpstream() // TODO make callback to Resolver to send answer upstream
+                    onSendUpstream.accept(answer.get());
                     return waiting();
                 }
                 return failed();
             }
+
         }
     }
 
-    public class ExplorationRequestStateMachineImpl extends RequestStateMachineImpl implements RequestStateMachine.Exploration {
+    public static class ExplorationRequestStateMachineImpl extends RequestStateMachineImpl implements RequestStateMachine.Exploration {
 
         private final Exploration.FindAnswer findAnswer;
-        private final SearchDownstreamImpl searchDownstream;
+        private final RequestStateMachine.Exploration.SearchDownstream searchDownstream;
         private final AnswerCache<ConceptMap> answerCache;
+        private final Consumer<Request> onSearchDownstream;
+        private final Resolver.DownstreamManager downstreamManager;
         private final Poller<ConceptMap> answerPoller;
-        private final Set<Request> downstreams;
 
-        ExplorationRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap> answerCache, Set<Request> downstreams) {
-            super(fromUpstream, iteration);
+        ExplorationRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap> answerCache,
+                                           Consumer<ConceptMap> onSendUpstream, Supplier<Void> onFail,
+                                           Consumer<Request> onSearchDownstream, Resolver.DownstreamManager downstreamManager) {
+            super(fromUpstream, iteration, onSendUpstream, onFail);
             this.answerCache = answerCache;
+            this.onSearchDownstream = onSearchDownstream;
+            this.downstreamManager = downstreamManager;
             this.answerPoller = this.answerCache.reader(false); // TODO: Check the usage of this flag
-            this.downstreams = downstreams;
             this.findAnswer = new ExplorationFindAnswerImpl();
             this.searchDownstream = new SearchDownstreamImpl();
         }
@@ -130,21 +148,23 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
             public NextStateFor.Exploration.FindAnswer nextState() { // TODO Add generic answer type
                 Optional<ConceptMap> answer = answerPoller.poll();
                 if (answer.isPresent()) {
-                    // callbackSendRequestUpstream() // TODO make callback to Resolver to send answer upstream
+                    onSendUpstream.accept(answer.get());
                     return waiting();
                 }
                 return toSearchDownstreamState();
             }
+
         }
 
         private class SearchDownstreamImpl implements RequestStateMachine.Exploration.SearchDownstream {
 
             public Exploration.SearchDownstream nextState() {
-                if (downstreams.isEmpty() || answerCache.isComplete())
+                if (!downstreamManager.hasDownstream() || answerCache.isComplete())
                     return failed();
-                // callbackToDownstream(nextDownstream) // TODO
+                onSearchDownstream.accept(downstreamManager.nextDownstream());
                 return waiting();
             }
+
         }
     }
 

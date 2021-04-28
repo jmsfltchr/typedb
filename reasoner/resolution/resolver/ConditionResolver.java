@@ -59,9 +59,9 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
     }
 
     @Override
-    protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
-        if (requestState.downstreamManager().hasDownstream()) {
-            requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
+    protected void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration) {
+        if (answerManager.downstreamManager().hasDownstream()) {
+            requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
             failToUpstream(fromUpstream, iteration);
         }
@@ -75,9 +75,9 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
 
     @Override
     boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-        RequestState requestState = requestStates.get(fromUpstream);
-        if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
-            requestState.producedRecorder().record(upstreamAnswer.conceptMap());
+        AnswerManager answerManager = answerManagers.get(fromUpstream);
+        if (!answerManager.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
+            answerManager.producedRecorder().record(upstreamAnswer.conceptMap());
             answerToUpstream(upstreamAnswer, fromUpstream, iteration);
             return true;
         } else {
@@ -86,13 +86,13 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
     }
 
     @Override
-    RequestState requestStateNew(int iteration) {
-        return new RequestState(iteration);
+    AnswerManager requestStateNew(int iteration) {
+        return new AnswerManager(iteration);
     }
 
     @Override
-    RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
-        return new RequestState(iteration);
+    AnswerManager requestStateForIteration(AnswerManager answerManagerPrior, int iteration) {
+        return new AnswerManager(iteration);
     }
 
     @Override

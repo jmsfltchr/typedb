@@ -204,14 +204,14 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected abstract static class CachingRequestState<ANSWER> extends RequestState {
+    protected abstract static class CachingAnswerManager<ANSWER> extends AnswerManager {
 
         protected final Request fromUpstream;
         protected final AnswerCache<ANSWER> answerCache;
         protected final boolean mayCauseReiteration;
         protected Poller<? extends Partial<?>> cacheReader;
 
-        public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration, boolean mayCauseReiteration) {
+        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration, boolean mayCauseReiteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
             this.answerCache = answerCache;

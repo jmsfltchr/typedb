@@ -22,15 +22,15 @@ import grakn.core.reasoner.resolution.answer.AnswerState;
 
 import java.util.Optional;
 
-public abstract class RequestState {
+public abstract class AnswerManager {
 
     private final int iteration;
 
-    protected RequestState(int iteration) {this.iteration = iteration;}
+    protected AnswerManager(int iteration) {this.iteration = iteration;}
 
     public abstract Optional<? extends AnswerState.Partial<?>> nextAnswer();
 
-    public int iteration() {
+    public int iteration() { // TODO: Don't use this, move to use it from the new AnswerStateMachine
         return iteration;
     }
 }

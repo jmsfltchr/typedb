@@ -113,6 +113,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         requestState.asExploration().newAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
 
         if (fromDownstream.answer().asConcludable().isExplain()) {
+            // TODO: We skip the cache here, which we don't elsewhere
             answerFound(fromDownstream.answer().asConcludable().toUpstreamInferred(), fromUpstream, iteration);
         } else if (iteration == requestState.iteration()) {
             nextAnswer(fromUpstream, requestState, iteration);
@@ -256,10 +257,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert cacheRegister.isRegistered(answerFromUpstream) == recursionState.hasReceived(answerFromUpstream); // TODO: Should be the same, and therefore can remove this part of recursionState
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             AnswerCache<ConceptMap> answerCache = cacheRegister.get(answerFromUpstream);
-            RetrievalRequestState requestState = new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
-            if (!recursionState.hasReceivedFrom(answerFromUpstream, fromUpstream))
-                requestState.asRetrieval().setRequiresReiteration();
-            return requestState;
+            return new RetrievalRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
         } else {
             assert fromUpstream.partialAnswer().isConcludable();
             AnswerCache<ConceptMap> answerCache =  new ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
@@ -267,7 +265,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 answerCache.cache(traversal);
             }
-            recursionState.recordReceived(fromUpstream);
+            recursionState.recordReceived(fromUpstream.partialAnswer().conceptMap());
             RequestState requestState = new RuleExplorationRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
             registerRules(fromUpstream, requestState.asExploration());
             return requestState;
@@ -420,9 +418,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             return this;
         }
 
-        private void setRequiresReiteration() {
-            answerCache.setRequiresReiteration();
-        }
     }
 
     /**
@@ -433,12 +428,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private static class RecursionState {
         private Set<ConceptMap> receivedMaps;
         private int iteration;
-        private final Map<ConceptMap, Request> exploringRequests;
 
         RecursionState(int iteration) {
             this.iteration = iteration;
             this.receivedMaps = new HashSet<>();
-            this.exploringRequests = new HashMap<>();
         }
 
         public int iteration() {
@@ -451,18 +444,12 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             receivedMaps = new HashSet<>();
         }
 
-        public void recordReceived(Request fromUpstream) {
-            ConceptMap conceptMap = fromUpstream.partialAnswer().conceptMap();
+        public void recordReceived(ConceptMap conceptMap) {
             receivedMaps.add(conceptMap);
-            exploringRequests.put(conceptMap, fromUpstream);
         }
 
         public boolean hasReceived(ConceptMap conceptMap) {
             return receivedMaps.contains(conceptMap);
-        }
-
-        public boolean hasReceivedFrom(ConceptMap conceptMap, Request from) {
-            return receivedMaps.contains(conceptMap) && exploringRequests.get(conceptMap).equals(from);
         }
     }
 }

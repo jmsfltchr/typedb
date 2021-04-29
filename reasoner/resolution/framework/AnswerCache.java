@@ -67,7 +67,7 @@ public abstract class AnswerCache<ANSWER> {
     // TODO: cacheIfAbsent?
     // TODO: Align with the behaviour for adding an iterator to the cache
     public void cache(ANSWER newAnswer) {
-        if (!isComplete()) addIfAbsent(newAnswer);
+        addIfAbsent(newAnswer);
     }
 
     public void cache(FunctionalIterator<ANSWER> newAnswers) {

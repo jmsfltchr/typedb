@@ -65,6 +65,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final Map<Driver<ConclusionResolver>, Rule> resolverRules;
     private final grakn.core.logic.resolvable.Concludable concludable;
     private final LogicManager logicMgr;
+    private final Map<Driver<? extends Resolver<?>>, RecursionState> recursionStates;
     private final Map<Request, AnswerManager> answerManagers;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
@@ -122,6 +123,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         answerManager.asExploration().newAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
 
         if (fromDownstream.answer().asConcludable().isExplain()) {
+            // TODO: We skip the cache here, which we don't elsewhere
             answerFound(fromDownstream.answer().asConcludable().toUpstreamInferred(), fromUpstream, iteration);
         } else if (iteration == answerManager.iteration()) {
             nextAnswer(fromUpstream, answerManager, iteration);
@@ -169,6 +171,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     public void terminate(Throwable cause) {
         super.terminate(cause);
         answerManagers.clear();
+        recursionStates.clear();
     }
 
     @Override
@@ -247,6 +250,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         LOG.debug("{}: Creating new Responses for iteration{}, request: {}", name(), iteration, fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
+        recursionStates.putIfAbsent(root, new RecursionState(iteration));
 
         RecursionState recursionState = getOrCreateRecursionState(root, iteration);
         CacheRegister<ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);
@@ -277,6 +281,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             useCaching = true;
         }
 
+        assert cacheRegister.isRegistered(answerFromUpstream) == recursionState.hasReceived(answerFromUpstream); // TODO: Should be the same, and therefore can remove this part of recursionState
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             AnswerCache<ConceptMap> answerCache = cacheRegister.get(answerFromUpstream); // TODO: It's possible the cache we get here uses subsumption, but that we shouldn't if we're explaining
             return new RetrievalAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
@@ -287,6 +292,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 answerCache.cache(traversal);
             }
+            recursionState.recordReceived(fromUpstream.partialAnswer().conceptMap());
             AnswerManager answerManager = new RuleExplorationAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
             registerRules(fromUpstream, answerManager.asExploration());
             return answerManager;
@@ -450,4 +456,36 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     }
 
+    /**
+     * Maintain iteration state per root query
+     * This allows us to share resolvers across different queries
+     * while maintaining the ability to do loop termination within a single query
+     */
+    private static class RecursionState {
+        private Set<ConceptMap> receivedMaps;
+        private int iteration;
+
+        RecursionState(int iteration) {
+            this.iteration = iteration;
+            this.receivedMaps = new HashSet<>();
+        }
+
+        public int iteration() {
+            return iteration;
+        }
+
+        public void nextIteration(int newIteration) {
+            assert newIteration > iteration;
+            iteration = newIteration;
+            receivedMaps = new HashSet<>();
+        }
+
+        public void recordReceived(ConceptMap conceptMap) {
+            receivedMaps.add(conceptMap);
+        }
+
+        public boolean hasReceived(ConceptMap conceptMap) {
+            return receivedMaps.contains(conceptMap);
+        }
+    }
 }

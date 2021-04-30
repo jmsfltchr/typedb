@@ -6,7 +6,6 @@ import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.Optional;
 import java.util.Set;
@@ -15,6 +14,7 @@ import java.util.function.Supplier;
 
 import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
+import static grakn.core.common.exception.ErrorMessage.Internal.UNIMPLEMENTED;
 
 public abstract class RequestStateMachineImpl implements RequestStateMachine {
 
@@ -170,11 +170,11 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
 
     @Override
     public boolean equals(Object o) {
-        throw new NotImplementedException(); // TODO
+        throw GraknException.of(UNIMPLEMENTED); // TODO
     }
 
     @Override
     public int hashCode() {
-        throw new NotImplementedException(); // TODO
+        throw GraknException.of(UNIMPLEMENTED); // TODO
     }
 }

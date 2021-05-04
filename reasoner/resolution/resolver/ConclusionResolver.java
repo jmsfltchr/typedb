@@ -27,6 +27,7 @@ import grakn.core.logic.Rule;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -210,7 +211,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
-            answerCache = new IdentifiedConceptsCache(cacheRegister, answerFromUpstream, useSubsumption);
+            answerCache = new IdentifiedConceptsCache(cacheRegister, answerFromUpstream);
             cacheRegister.register(answerFromUpstream, answerCache);
         }
         AnswerManager answerManager = new AnswerManager(fromUpstream, answerCache, iteration, deduplicate);
@@ -248,11 +249,11 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
 
     // TODO Needs a better name
-    private static class IdentifiedConceptsCache extends AnswerCache.Subsumable<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
+    private static class IdentifiedConceptsCache extends Subsumable<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
         protected IdentifiedConceptsCache(CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister,
-                                          ConceptMap state, boolean useSubsumption) {
-            super(cacheRegister, state, useSubsumption);
+                                          ConceptMap state) {
+            super(cacheRegister, state);
         }
 
         @Override

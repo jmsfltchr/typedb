@@ -115,7 +115,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
-            answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, false);
+            answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
             cacheRegister.register(answerFromUpstream, answerCache);
             FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
             answerCache.cache(traversal);

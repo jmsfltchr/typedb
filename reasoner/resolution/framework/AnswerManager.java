@@ -18,9 +18,14 @@
 
 package grakn.core.reasoner.resolution.framework;
 
+import grakn.core.common.exception.GraknException;
 import grakn.core.reasoner.resolution.answer.AnswerState;
+import grakn.core.reasoner.resolution.framework.Resolver.DownstreamManager;
 
 import java.util.Optional;
+
+import static grakn.common.util.Objects.className;
+import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
 
 public abstract class AnswerManager {
 
@@ -32,5 +37,21 @@ public abstract class AnswerManager {
 
     public int iteration() { // TODO: Don't use this, move to use it from the new AnswerStateMachine
         return iteration;
+    }
+
+    public boolean isExploration() {
+        return false;
+    }
+
+    public Exploration asExploration() {
+        throw GraknException.of(ILLEGAL_CAST, className(this.getClass()), className(Exploration.class));
+    }
+
+    public interface Exploration {
+        void newAnswer(AnswerState.Partial<?> partial, boolean requiresReiteration);
+
+        DownstreamManager downstreamManager();
+
+        boolean singleAnswerRequired();
     }
 }

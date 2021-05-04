@@ -25,6 +25,9 @@ import grakn.core.common.poller.AbstractPoller;
 import grakn.core.common.poller.Poller;
 import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
+import grakn.core.reasoner.resolution.answer.AnswerState;
+import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.Resolver.CacheRegister;
 import grakn.core.traversal.common.Identifier;
 
 import java.util.ArrayList;
@@ -35,7 +38,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
@@ -44,18 +46,16 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     protected final List<ANSWER> answers;
     private final Set<ANSWER> answersSet;
-    protected final Set<ConceptMap> subsumingCacheKeys;
     private boolean reiterateOnNewAnswers;
     private boolean requiresReiteration;
-    private FunctionalIterator<ANSWER> unexploredAnswers;
-    private boolean complete;
-    protected final Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister;
-    private final ConceptMap state;
+    protected FunctionalIterator<ANSWER> unexploredAnswers;
+    protected boolean complete;
+    protected final CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister;
+    protected final ConceptMap state;
 
-    protected AnswerCache(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state, boolean useSubsumption) {
+    protected AnswerCache(CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
         this.cacheRegister = cacheRegister;
         this.state = state;
-        this.subsumingCacheKeys = useSubsumption ? getSubsumingCacheKeys(state) : set();
         this.unexploredAnswers = Iterators.empty();
         this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
         this.answersSet = new HashSet<>();
@@ -121,7 +121,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
     }
 
 
-    private Optional<ANSWER> addIfAbsent(ANSWER answer) {
+    protected Optional<ANSWER> addIfAbsent(ANSWER answer) {
         if (answersSet.contains(answer)) return Optional.empty();
         answers.add(answer);
         answersSet.add(answer);
@@ -139,33 +139,10 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
     }
 
     public boolean isComplete() {
-        if (complete) return true;
-        Optional<AnswerCache<?, ANSWER>> subsumingCache;
-        if ((subsumingCache = getCompletedSubsumingCache()).isPresent()) {
-            completeFromSubsumer(subsumingCache.get());
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    protected abstract Optional<AnswerCache<?, ANSWER>> getCompletedSubsumingCache();
-
-    private void completeFromSubsumer(AnswerCache<?, ANSWER> subsumingCache) {
-        setCompletedAnswers(subsumingCache.answers());
-        complete = true;
-        unexploredAnswers = Iterators.empty();
-        if (subsumingCache.requiresReiteration()) setRequiresReiteration();
+        return complete;
     }
 
     protected abstract List<SUBSUMES> answers();
-
-    private void setCompletedAnswers(List<ANSWER> completeAnswers) {
-        List<ANSWER> subsumingAnswers = iterate(completeAnswers).filter(e -> subsumes(e, state)).toList();
-        subsumingAnswers.forEach(this::addIfAbsent);
-    }
-
-    protected abstract boolean subsumes(ANSWER answer, ConceptMap contained);
 
     public boolean requiresReiteration() {
         return requiresReiteration;
@@ -196,17 +173,60 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         return new ConceptMap(map);
     }
 
+    public static class ConcludableExplanationCache extends AnswerCache<Partial.Concludable<?>, ConceptMap> {
+
+        public ConcludableExplanationCache(CacheRegister<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
+            super(cacheRegister, state);
+        }
+
+        @Override
+        protected List<ConceptMap> answers() {
+            return iterate(answers).map(AnswerState::conceptMap).distinct().toList();
+        }
+
+    }
+
     public static abstract class Subsumable<ANSWER, SUBSUMES> extends AnswerCache<ANSWER, SUBSUMES> {
 
-        protected Subsumable(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state, boolean useSubsumption) {
-            super(cacheRegister, state, useSubsumption);
+        protected final Set<ConceptMap> subsumingCacheKeys;
+
+        protected Subsumable(CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
+            super(cacheRegister, state);
+            this.subsumingCacheKeys = getSubsumingCacheKeys(state);
         }
+
+        public boolean isComplete() {
+            if (super.isComplete()) return true;
+            Optional<AnswerCache<?, ANSWER>> subsumingCache;
+            if ((subsumingCache = getCompletedSubsumingCache()).isPresent()) {
+                completeFromSubsumer(subsumingCache.get());
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        protected abstract Optional<AnswerCache<?, ANSWER>> getCompletedSubsumingCache();
+
+        private void completeFromSubsumer(AnswerCache<?, ANSWER> subsumingCache) {
+            setCompletedAnswers(subsumingCache.answers());
+            complete = true;
+            unexploredAnswers = Iterators.empty();
+            if (subsumingCache.requiresReiteration()) setRequiresReiteration();
+        }
+
+        private void setCompletedAnswers(List<ANSWER> completeAnswers) {
+            List<ANSWER> subsumingAnswers = iterate(completeAnswers).filter(e -> subsumes(e, state)).toList();
+            subsumingAnswers.forEach(this::addIfAbsent);
+        }
+
+        protected abstract boolean subsumes(ANSWER answer, ConceptMap contained);
     }
 
     public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
 
-        public ConceptMapCache(Resolver.CacheRegister<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
-            super(cacheRegister, state, useSubsumption);
+        public ConceptMapCache(CacheRegister<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
+            super(cacheRegister, state);
         }
 
         @Override

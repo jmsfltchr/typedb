@@ -190,7 +190,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
             Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound); // TODO: This returns a partial, but it won't contain the correct explanation yet
             if (upstreamAnswer.isPresent()) {
-                answerFound(upstreamAnswer.get().asConcludable().toUpstreamInferred(), fromUpstream, iteration); // TODO: Is this small difference from the implementation below correct or necessary?
+                answerFound(upstreamAnswer.get(), fromUpstream, iteration); // TODO: Is this small difference from the implementation below correct or necessary?
             } else {
                 Exploration exploration;
                 if ((exploration = answerManager.asExploration()).downstreamManager().hasDownstream()) {
@@ -375,7 +375,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected FunctionalIterator<? extends Partial<?>> toUpstream(Partial.Concludable<?> partial) {
-            if (concludable.isInferredAnswer(partial.conceptMap())) {
+            if (partial.asExplain().hasExplanation()) {
                 Partial<?> upstreamAnswer = partial.asExplain().toUpstreamInferred();
                 if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
                 return Iterators.single(upstreamAnswer);

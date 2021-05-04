@@ -363,6 +363,8 @@ public interface AnswerState {
                 @Override
                 Optional<Conclusion.Explain> toDownstream(Unifier unifier, Rule rule);
 
+                boolean hasExplanation();
+
                 Explain with(ConceptMap extension, boolean requiresReiteration, Rule rule, ConceptMap conclusionAnswer,
                              Unifier unifier, ConceptMap conditionAnswer);
 

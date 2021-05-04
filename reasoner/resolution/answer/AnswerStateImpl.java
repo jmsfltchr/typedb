@@ -729,6 +729,10 @@ public abstract class AnswerStateImpl implements AnswerState {
                     return new ExplainImpl(explanation, mapping(), parent(), extendAnswer(extension), root(), requiresReiteration);
                 }
 
+                public boolean hasExplanation() {
+                    return explanation != null;
+                }
+
                 private Map<Identifier.Variable.Retrievable, Set<Identifier.Variable.Retrievable>> transitiveMapping(Mapping mapping, Unifier unifier) {
                     Map<Identifier.Variable.Retrievable, Set<Identifier.Variable.Retrievable>> merged = new HashMap<>();
                     mapping.mapping().forEach((from, to) -> {

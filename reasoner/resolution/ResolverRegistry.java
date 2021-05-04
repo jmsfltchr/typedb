@@ -217,9 +217,12 @@ public class ResolverRegistry {
 
     public Actor.Driver<DisjunctionResolver.Nested> nested(Disjunction disjunction) {
         LOG.debug("Creating Disjunction resolver for : {}", disjunction);
-        return Actor.driver(driver -> new DisjunctionResolver.Nested(
+        Actor.Driver<DisjunctionResolver.Nested> resolver = Actor.driver(driver -> new DisjunctionResolver.Nested(
                 driver, disjunction, this, traversalEngine, conceptMgr, resolutionTracing
         ), executorService);
+        resolvers.add(resolver);
+        if (terminated.get()) throw GraknException.of(RESOLUTION_TERMINATED); // guard races without synchronized
+        return resolver;
     }
 
     private Map<Variable.Retrievable, Variable.Retrievable> identity(Resolvable<Conjunction> conjunctionResolvable) {
@@ -228,10 +231,13 @@ public class ResolverRegistry {
 
     public Actor.Driver<RootResolver.Explain> explainer(Conjunction conjunction, Consumer<Explain.Finished> requestAnswered,
                                                         Consumer<Integer> requestFailed, Consumer<Throwable> exception) {
-        return Actor.driver(driver -> new RootResolver.Explain(
+        Actor.Driver<RootResolver.Explain> resolver = Actor.driver(driver -> new RootResolver.Explain(
                 driver, conjunction, requestAnswered, requestFailed, exception,
                 this, traversalEngine, conceptMgr, logicMgr, planner, resolutionTracing
         ), executorService);
+        resolvers.add(resolver);
+        if (terminated.get()) throw GraknException.of(RESOLUTION_TERMINATED); // guard races without synchronized
+        return resolver;
     }
 
     public void setExecutorService(ActorExecutorGroup executorService) {

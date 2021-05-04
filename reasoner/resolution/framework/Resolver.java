@@ -234,13 +234,18 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
     // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
 
-    public static class CacheRegister<ANSWER_CACHE extends AnswerCache<?, SUBSUMES>> {
+    public static class CacheRegister<ANSWER_CACHE extends AnswerCache<?, SUBSUMES>, SUBSUMES> {
         Map<ConceptMap, ANSWER_CACHE> answerCaches;
         private int iteration;
 
         public CacheRegister(int iteration) {
             this.iteration = iteration;
             this.answerCaches = new HashMap<>();
+        }
+
+        public void register(ConceptMap fromUpstream, ANSWER_CACHE answerCache) {
+            assert !answerCaches.containsKey(fromUpstream);
+            answerCaches.put(fromUpstream, answerCache);
         }
 
         public boolean isRegistered(ConceptMap conceptMap) {
@@ -259,11 +264,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
 
         public ANSWER_CACHE get(ConceptMap fromUpstream) {
             return answerCaches.get(fromUpstream);
-        }
-
-        void register(ConceptMap fromUpstream, AnswerCache<?, ?> answerCache) {
-            assert !answerCaches.containsKey(fromUpstream);
-            answerCaches.put(fromUpstream, answerCache);
         }
     }
 

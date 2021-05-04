@@ -54,7 +54,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private final Map<Request, AnswerManager> answerManagers;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<IdentifiedConceptsCache>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>>> cacheRegisters;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -193,7 +193,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<IdentifiedConceptsCache> cacheRegister = cacheRegisters.get(root);
+        CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean deduplicate;
@@ -206,11 +206,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             useSubsumption = true;
         }
 
-        AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache;
+        IdentifiedConceptsCache answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
             answerCache = new IdentifiedConceptsCache(cacheRegister, answerFromUpstream, useSubsumption);
+            cacheRegister.register(answerFromUpstream, answerCache);
         }
         AnswerManager answerManager = new AnswerManager(fromUpstream, answerCache, iteration, deduplicate);
         assert fromUpstream.partialAnswer().isConclusion();
@@ -249,7 +250,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     // TODO Needs a better name
     private static class IdentifiedConceptsCache extends AnswerCache.Subsumable<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
-        protected IdentifiedConceptsCache(CacheRegister<IdentifiedConceptsCache> cacheRegister,
+        protected IdentifiedConceptsCache(CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister,
                                           ConceptMap state, boolean useSubsumption) {
             super(cacheRegister, state, useSubsumption);
         }

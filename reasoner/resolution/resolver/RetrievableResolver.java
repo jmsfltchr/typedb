@@ -48,7 +48,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, AnswerManager> answerManagers;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMapCache>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMapCache, ConceptMap>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -110,12 +110,13 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<ConceptMapCache> cacheRegister = cacheRegisters.get(root);
+        CacheRegister<ConceptMapCache, ConceptMap> cacheRegister = cacheRegisters.get(root);
         ConceptMapCache answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
             answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, false);
+            cacheRegister.register(answerFromUpstream, answerCache);
             FunctionalIterator<ConceptMap> traversal = traversalIterator(retrievable.pattern(), answerFromUpstream);
             answerCache.cache(traversal);
         }

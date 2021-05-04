@@ -63,7 +63,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final Map<Request, ConceptMapAnswerManager> answerManagers;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<AnswerCache<?, ConceptMap>>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<AnswerCache<?, ConceptMap>, ConceptMap>> cacheRegisters;
 
     public ConcludableResolver(Driver<ConcludableResolver> driver, grakn.core.logic.resolvable.Concludable concludable,
                                ResolverRegistry registry, TraversalEngine traversalEngine, ConceptManager conceptMgr,
@@ -252,7 +252,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         recursionStates.putIfAbsent(root, new RecursionState(iteration));
 
         RecursionState recursionState = getOrCreateRecursionState(root, iteration);
-        CacheRegister<AnswerCache<?, ConceptMap>> cacheRegister = getOrCreateCacheRegister(root, iteration);
+        CacheRegister<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean singleAnswerRequired;
@@ -264,7 +264,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             useSubsumption = false;
 
 //            assert fromUpstream.partialAnswer().isConcludable();
-//            AnswerCache<ConceptMap> answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
+//            AnswerCache<ConceptMap> answerCache = new ExplainingRuleExplorationAnswerManager(fromUpstream, cacheRegister, answerFromUpstream, useSubsumption);
+//            cacheRegister.register(answerFromUpstream, answerCache);
 //            if (!answerCache.isComplete()) {
 //                FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
 //                answerCache.cache(traversal);
@@ -288,6 +289,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         } else {
             assert fromUpstream.partialAnswer().isConcludable();
             AnswerCache.ConceptMapCache answerCache = new AnswerCache.ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
+            cacheRegister.register(answerFromUpstream, answerCache);
             if (!answerCache.isComplete()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 answerCache.cache(traversal);
@@ -299,9 +301,9 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    private CacheRegister<AnswerCache<?, ConceptMap>> getOrCreateCacheRegister(Driver<? extends Resolver<?>> root, int iteration) {
+    private CacheRegister<AnswerCache<?, ConceptMap>, ConceptMap> getOrCreateCacheRegister(Driver<? extends Resolver<?>> root, int iteration) {
         cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<AnswerCache<?, ConceptMap>> cacheRegister = cacheRegisters.get(root);
+        CacheRegister<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = cacheRegisters.get(root);
         if (cacheRegister.iteration() < iteration) {
             cacheRegister.nextIteration(iteration);
         }

@@ -49,10 +49,10 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
     private boolean requiresReiteration;
     private FunctionalIterator<ANSWER> unexploredAnswers;
     private boolean complete;
-    protected final Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>> cacheRegister;
+    protected final Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister;
     private final ConceptMap state;
 
-    protected AnswerCache(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>> cacheRegister, ConceptMap state, boolean useSubsumption) {
+    protected AnswerCache(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state, boolean useSubsumption) {
         this.cacheRegister = cacheRegister;
         this.state = state;
         this.subsumingCacheKeys = useSubsumption ? getSubsumingCacheKeys(state) : set();
@@ -62,7 +62,6 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         this.reiterateOnNewAnswers = false;
         this.requiresReiteration = false;
         this.complete = false;
-        this.cacheRegister.register(state, this);
     }
 
     public ConceptMapCache asConceptMapCache() {
@@ -199,14 +198,14 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public static abstract class Subsumable<ANSWER, SUBSUMES> extends AnswerCache<ANSWER, SUBSUMES> {
 
-        protected Subsumable(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>> cacheRegister, ConceptMap state, boolean useSubsumption) {
+        protected Subsumable(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state, boolean useSubsumption) {
             super(cacheRegister, state, useSubsumption);
         }
     }
 
     public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
 
-        public ConceptMapCache(Resolver.CacheRegister<? extends AnswerCache<?, ConceptMap>> cacheRegister, ConceptMap state, boolean useSubsumption) {
+        public ConceptMapCache(Resolver.CacheRegister<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
             super(cacheRegister, state, useSubsumption);
         }
 

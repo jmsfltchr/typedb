@@ -256,6 +256,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
             assert fromUpstream.partialAnswer().isConcludable();
+            assert !cacheRegister.isRegistered(answerFromUpstream);
             ConcludableExplanationCache answerCache = new ConcludableExplanationCache(cacheRegister, answerFromUpstream);
             cacheRegister.register(answerFromUpstream, answerCache);
             if (!answerCache.isComplete()) {
@@ -348,6 +349,14 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                                        int iteration, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration);
             this.downstreamManager = new DownstreamManager();
+        }
+
+        public boolean isExploration() {
+            return true;
+        }
+
+        public Exploration asExploration() {
+            return this;
         }
 
         public DownstreamManager downstreamManager() { // TODO: Don't use this, move to use it from the new AnswerStateMachine

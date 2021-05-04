@@ -27,6 +27,7 @@ import grakn.core.logic.resolvable.Retrievable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -47,7 +48,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, AnswerManager> answerManagers;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMap>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMapCache>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -109,8 +110,8 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<ConceptMap> cacheRegister = cacheRegisters.get(root);
-        AnswerCache<ConceptMap> answerCache;
+        CacheRegister<ConceptMapCache> cacheRegister = cacheRegisters.get(root);
+        ConceptMapCache answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
@@ -131,28 +132,16 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    protected static class ConceptMapCache extends AnswerCache<ConceptMap> {
+    private static class AnswerManager extends CachingAnswerManager<ConceptMap, ConceptMap> {
 
-        protected ConceptMapCache(CacheRegister<ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
-            super(cacheRegister, state, useSubsumption);
-        }
-
-        @Override
-        protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
-            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
-        }
-    }
-
-    private static class AnswerManager extends CachingAnswerManager<ConceptMap> {
-
-        public AnswerManager(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration) {
+        public AnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration, true); // TODO do we want this to cause reiteration?
         }
 
         @Override
-        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap answer) {
             Partial.Retrievable<?> retrievable = fromUpstream.partialAnswer().asRetrievable();
-            Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(conceptMap);
+            Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(answer);
             if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
             return Iterators.single(upstreamAnswer);
         }

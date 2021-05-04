@@ -29,15 +29,12 @@ import grakn.core.logic.Rule;
 import grakn.core.logic.resolvable.Unifier;
 import grakn.core.pattern.Conjunction;
 import grakn.core.reasoner.resolution.ResolverRegistry;
-import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
-import grakn.core.reasoner.resolution.resolver.RequestStateMachine.Exploration;
-import grakn.core.reasoner.resolution.resolver.RequestStateMachineImpl.ExplorationRequestStateMachineImpl;
 import grakn.core.traversal.TraversalEngine;
 import grakn.core.traversal.common.Identifier;
 import org.slf4j.Logger;
@@ -49,12 +46,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 import static grakn.common.util.Objects.className;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
-import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
 
 public class ConcludableResolver extends Resolver<ConcludableResolver> {
@@ -66,10 +60,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final grakn.core.logic.resolvable.Concludable concludable;
     private final LogicManager logicMgr;
     private final Map<Driver<? extends Resolver<?>>, RecursionState> recursionStates;
-    private final Map<Request, AnswerManager> answerManagers;
+    private final Map<Request, ConceptMapAnswerManager> answerManagers;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMap>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<AnswerCache<?, ConceptMap>>> cacheRegisters;
 
     public ConcludableResolver(Driver<ConcludableResolver> driver, grakn.core.logic.resolvable.Concludable concludable,
                                ResolverRegistry registry, TraversalEngine traversalEngine, ConceptManager conceptMgr,
@@ -93,13 +87,13 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (!isInitialised) initialiseDownstreamResolvers();
         if (isTerminated()) return;
 
-////        AnswerManager requestState = getOrReplaceRequestState(fromUpstream, iteration);
+////        ConceptMapAnswerManager requestState = getOrReplaceRequestState(fromUpstream, iteration);
 //        RequestStateMachine requestStateMachine = getOrReplaceRequestState(fromUpstream, iteration);
 //
 //        requestStateMachine.receivedIteration(iteration);
 //        requestStateMachine.proceed();
 
-        AnswerManager requestState = getOrReplaceRequestState(fromUpstream, iteration);
+        ConceptMapAnswerManager requestState = getOrReplaceRequestState(fromUpstream, iteration);
         if (iteration < requestState.iteration()) {
             // short circuit if the request came from a prior iteration
             failToUpstream(fromUpstream, iteration);
@@ -116,11 +110,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        AnswerManager answerManager = this.answerManagers.get(fromUpstream);
+        ConceptMapAnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
         // assert cacheRegisters.get(fromUpstream.partialAnswer().root()).isRegistered(fromUpstream.partialAnswer().conceptMap()); // TODO: This throws in "conjunctions of untyped reasoned relations are correctly resolved" but without consequence
         assert answerManager.isExploration();
-        answerManager.asExploration().newAnswer(fromDownstream.answer().conceptMap(), fromDownstream.answer().requiresReiteration());
+        answerManager.asExploration().newAnswer(fromDownstream.answer(), fromDownstream.answer().requiresReiteration());
 
         if (fromDownstream.answer().asConcludable().isExplain()) {
             // TODO: We skip the cache here, which we don't elsewhere
@@ -141,7 +135,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     we respond for all N ahead of time. Then, when the rules actually return an answer to this concludable, we do nothing.
      */
     private void answerFound(Partial.Compound<?, ?> upstreamAnswer, Request fromUpstream, int iteration) {
-        AnswerManager answerManager = this.answerManagers.get(fromUpstream);
+        ConceptMapAnswerManager answerManager = this.answerManagers.get(fromUpstream);
         if (answerManager.isExploration() && answerManager.singleAnswerRequired() && !upstreamAnswer.isExplain()) {
             answerManager.asExploration().downstreamManager().clearDownstreams();
             // TODO: Should we set the cache complete here (and is that correct?), or is that already achieved implicitly?
@@ -156,7 +150,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        AnswerManager answerManager = this.answerManagers.get(fromUpstream);
+        ConceptMapAnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
         if (iteration < answerManager.iteration()) {
             // short circuit old iteration failed messages to upstream
@@ -192,13 +186,18 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (!isTerminated()) isInitialised = true;
     }
 
-    private void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration) {
+    private void nextAnswer(Request fromUpstream, ConceptMapAnswerManager answerManager, int iteration) {
         if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
-            RuleExplorationAnswerManager exploration;
-            if ((exploration = answerManager.asExploration()).downstreamManager().hasDownstream()) {
-                requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
+            Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound); // TODO: This returns a partial, but it won't contain the correct explanation yet
+            if (upstreamAnswer.isPresent()) {
+                answerFound(upstreamAnswer.get().asConcludable().toUpstreamInferred(), fromUpstream, iteration); // TODO: Is this small difference from the implementation below correct or necessary?
             } else {
-                failToUpstream(fromUpstream, iteration);
+                RuleExplorationAnswerManager exploration;
+                if ((exploration = answerManager.asExploration()).downstreamManager().hasDownstream()) {
+                    requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
+                } else {
+                    failToUpstream(fromUpstream, iteration);
+                }
             }
         } else {
             Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound);
@@ -220,23 +219,23 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    private AnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
+    private ConceptMapAnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!answerManagers.containsKey(fromUpstream)) {
-            AnswerManager answerManager = createRequestState(fromUpstream, iteration);
+            ConceptMapAnswerManager answerManager = createRequestState(fromUpstream, iteration);
             answerManagers.put(fromUpstream, answerManager);
         } else {
-            AnswerManager answerManager = this.answerManagers.get(fromUpstream);
+            ConceptMapAnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
             if (answerManager.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                AnswerManager newAnswerManager = createRequestState(fromUpstream, iteration);
+                ConceptMapAnswerManager newAnswerManager = createRequestState(fromUpstream, iteration);
                 this.answerManagers.put(fromUpstream, newAnswerManager);
             }
         }
         return answerManagers.get(fromUpstream);
     }
 
-    protected AnswerManager createRequestState(Request fromUpstream, int iteration) {
+    protected ConceptMapAnswerManager createRequestState(Request fromUpstream, int iteration) {
 
 //        // TODO: Move this to getOrReplaceRequestState, just here to try the UX for now
 //        Consumer<AnswerState> onSendUpstream = (answer) -> answerToUpstream(answer, fromUpstream, iteration);
@@ -253,55 +252,56 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         recursionStates.putIfAbsent(root, new RecursionState(iteration));
 
         RecursionState recursionState = getOrCreateRecursionState(root, iteration);
-        CacheRegister<ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);
+        CacheRegister<AnswerCache<?, ConceptMap>> cacheRegister = getOrCreateCacheRegister(root, iteration);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean singleAnswerRequired;
         boolean deduplicate;
-        boolean useCaching;
+        boolean useSubsumption;
         if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
             singleAnswerRequired = false;
             deduplicate = false;
-            useCaching = false;
+            useSubsumption = false;
 
 //            assert fromUpstream.partialAnswer().isConcludable();
-//            AnswerCache<ConceptMap> answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, useCaching);
+//            AnswerCache<ConceptMap> answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
 //            if (!answerCache.isComplete()) {
 //                FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
 //                answerCache.cache(traversal);
 //            }
 //            recursionState.recordReceived(fromUpstream);
-//            AnswerManager answerManager = new RuleExplorationAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
+//            ConceptMapAnswerManager answerManager = new RuleExplorationAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
 //            registerRules(fromUpstream, answerManager.asExploration());
 //            return answerManager;
 
         } else {
             singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
             deduplicate = true;
-            useCaching = true;
+            useSubsumption = true;
         }
 
         assert cacheRegister.isRegistered(answerFromUpstream) == recursionState.hasReceived(answerFromUpstream); // TODO: Should be the same, and therefore can remove this part of recursionState
         if (cacheRegister.isRegistered(answerFromUpstream)) {
-            AnswerCache<ConceptMap> answerCache = cacheRegister.get(answerFromUpstream); // TODO: It's possible the cache we get here uses subsumption, but that we shouldn't if we're explaining
-            return new RetrievalAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
+            AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream); // TODO: It's possible the cache we get here uses subsumption, but that we shouldn't if we're explaining
+            // TODO: can we always cast to a ConceptMapCache?
+            return new RetrievalAnswerManager(fromUpstream, answerCache.asConceptMapCache(), iteration, singleAnswerRequired, deduplicate);
         } else {
             assert fromUpstream.partialAnswer().isConcludable();
-            AnswerCache<ConceptMap> answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream, useCaching);
+            AnswerCache.ConceptMapCache answerCache = new AnswerCache.ConceptMapCache(cacheRegister, answerFromUpstream, useSubsumption);
             if (!answerCache.isComplete()) {
                 FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                 answerCache.cache(traversal);
             }
             recursionState.recordReceived(fromUpstream.partialAnswer().conceptMap());
-            AnswerManager answerManager = new RuleExplorationAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
+            ConceptMapAnswerManager answerManager = new RuleExplorationAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate);
             registerRules(fromUpstream, answerManager.asExploration());
             return answerManager;
         }
     }
 
-    private CacheRegister<ConceptMap> getOrCreateCacheRegister(Driver<? extends Resolver<?>> root, int iteration) {
+    private CacheRegister<AnswerCache<?, ConceptMap>> getOrCreateCacheRegister(Driver<? extends Resolver<?>> root, int iteration) {
         cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<ConceptMap> cacheRegister = cacheRegisters.get(root);
+        CacheRegister<AnswerCache<?, ConceptMap>> cacheRegister = cacheRegisters.get(root);
         if (cacheRegister.iteration() < iteration) {
             cacheRegister.nextIteration(iteration);
         }
@@ -347,26 +347,46 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    public static class ConceptMapCache extends AnswerCache<ConceptMap> {
+    private class ExplainingRuleExplorationAnswerManager extends CachingAnswerManager<Partial.Concludable<?>, ConceptMap> {
 
-        protected ConceptMapCache(CacheRegister<ConceptMap> cacheRegister, ConceptMap state, boolean useSubsumption) {
-            super(cacheRegister, state, useSubsumption);
+        private final DownstreamManager downstreamManager;
+
+        public ExplainingRuleExplorationAnswerManager(Request fromUpstream, AnswerCache<Partial.Concludable<?>, ConceptMap> answerCache,
+                                                      int iteration, boolean mayCauseReiteration) {
+            super(fromUpstream, answerCache, iteration, mayCauseReiteration);
+            this.downstreamManager = new DownstreamManager();
+        }
+
+        public DownstreamManager downstreamManager() { // TODO: Don't use this, move to use it from the new AnswerStateMachine
+            return downstreamManager;
         }
 
         @Override
-        protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
-            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(Partial.Concludable<?> partial) {
+            Partial<?> upstreamAnswer = partial.asExplain().toUpstreamInferred();
+            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
+            return Iterators.single(upstreamAnswer);
+        }
+
+        @Override
+        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
+            return false;
+        }
+
+        public void newAnswer(Partial.Concludable<?> partial, boolean requiresReiteration) {
+            answerCache.cache(partial);
+            if (requiresReiteration) answerCache.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
         }
     }
 
-    protected abstract class AnswerManager extends CachingAnswerManager<ConceptMap> {
+    private abstract class ConceptMapAnswerManager extends CachingAnswerManager<ConceptMap, ConceptMap> {
 
         private final ProducedRecorder producedRecorder;
         private final boolean singleAnswerRequired;
         private final boolean deduplicate;
 
-        public AnswerManager(Request fromUpstream, AnswerCache<ConceptMap> answerCache, int iteration,
-                             boolean singleAnswerRequired, boolean deduplicate, boolean mayCauseReiteration) {
+        public ConceptMapAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration,
+                                       boolean singleAnswerRequired, boolean deduplicate, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration);
             this.singleAnswerRequired = singleAnswerRequired;
             this.deduplicate = deduplicate;
@@ -382,16 +402,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         @Override
         protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
-            Partial.Compound<?, ?> upstreamAnswer;
-            if (partial.isMatch()) {
-                upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
-            } else if (partial.isExplain()) {
-                assert conceptMap.concepts().equals(partial.conceptMap().concepts());
-                upstreamAnswer = partial.asExplain().toUpstreamInferred();
-            } else {
-                throw GraknException.of(ILLEGAL_STATE);
-            }
-            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
+            assert !partial.isExplain();
+            assert partial.isMatch();
+            Partial.Compound<?, ?> upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
+            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
             return Iterators.single(upstreamAnswer);
         }
 
@@ -403,20 +417,16 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             throw GraknException.of(ILLEGAL_CAST, className(this.getClass()), className(RuleExplorationAnswerManager.class));
         }
 
-        public RetrievalAnswerManager asRetrieval() {
-            throw GraknException.of(ILLEGAL_CAST, className(this.getClass()), className(RetrievalAnswerManager.class));
-        }
-
         public boolean singleAnswerRequired() {
             return singleAnswerRequired;
         }
     }
 
-    private class RuleExplorationAnswerManager extends AnswerManager {
+    private class RuleExplorationAnswerManager extends ConceptMapAnswerManager {
 
         private final DownstreamManager downstreamManager;
 
-        public RuleExplorationAnswerManager(Request fromUpstream, AnswerCache<ConceptMap> answerCache,
+        public RuleExplorationAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
                                             int iteration, boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate, false);
             this.downstreamManager = new DownstreamManager();
@@ -436,22 +446,17 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             return downstreamManager;
         }
 
-        public void newAnswer(ConceptMap conceptMap, boolean requiresReiteration) {
-            answerCache.cache(conceptMap);
+        public void newAnswer(Partial<?> partial, boolean requiresReiteration) {
+            answerCache.cache(partial.conceptMap());
             if (requiresReiteration) answerCache.setRequiresReiteration();
         }
     }
 
-    private class RetrievalAnswerManager extends AnswerManager {
+    private class RetrievalAnswerManager extends ConceptMapAnswerManager {
 
-        public RetrievalAnswerManager(Request fromUpstream, AnswerCache<ConceptMap> answerCache,
+        public RetrievalAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
                                       int iteration, boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, singleAnswerRequired, deduplicate, true);
-        }
-
-        @Override
-        public RetrievalAnswerManager asRetrieval() {
-            return this;
         }
 
     }

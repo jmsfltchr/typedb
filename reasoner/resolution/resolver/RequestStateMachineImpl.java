@@ -87,10 +87,10 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
     public static class RetrievalRequestStateMachineImpl extends RequestStateMachineImpl implements RequestStateMachine.Retrieval {
 
         private final FindAnswer findAnswer;
-        private final AnswerCache<ConceptMap> answerCache;
+        private final AnswerCache<ConceptMap, SUBSUMES> answerCache;
         private final Poller<ConceptMap> answerPoller;
 
-        RetrievalRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap> answerCache,
+        RetrievalRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap, SUBSUMES> answerCache,
                                          Consumer<ConceptMap> onSendUpstream, Supplier<Void> onFail) {
             super(fromUpstream, iteration, onSendUpstream, onFail);
             this.answerCache = answerCache;
@@ -120,12 +120,12 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
 
         private final Exploration.FindAnswer findAnswer;
         private final RequestStateMachine.Exploration.SearchDownstream searchDownstream;
-        private final AnswerCache<ConceptMap> answerCache;
+        private final AnswerCache<ConceptMap, SUBSUMES> answerCache;
         private final Consumer<Request> onSearchDownstream;
         private final Resolver.DownstreamManager downstreamManager;
         private final Poller<ConceptMap> answerPoller;
 
-        ExplorationRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap> answerCache,
+        ExplorationRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap, SUBSUMES> answerCache,
                                            Consumer<ConceptMap> onSendUpstream, Supplier<Void> onFail,
                                            Consumer<Request> onSearchDownstream, Resolver.DownstreamManager downstreamManager) {
             super(fromUpstream, iteration, onSendUpstream, onFail);

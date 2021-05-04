@@ -51,10 +51,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static grakn.common.collection.Collections.set;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.exception.ErrorMessage.Internal.RESOURCE_CLOSED;
-import static grakn.core.common.iterator.Iterators.iterate;
 import static grakn.core.common.parameters.Arguments.Query.Producer.INCREMENTAL;
 
 public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Actor<RESOLVER> {
@@ -204,14 +202,14 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected abstract static class CachingAnswerManager<ANSWER> extends AnswerManager {
+    protected abstract static class CachingAnswerManager<ANSWER, SUBSUMES> extends AnswerManager {
 
         protected final Request fromUpstream;
-        protected final AnswerCache<ANSWER> answerCache;
+        protected final AnswerCache<ANSWER, SUBSUMES> answerCache;
         protected final boolean mayCauseReiteration;
         protected Poller<? extends Partial<?>> cacheReader;
 
-        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER> answerCache, int iteration, boolean mayCauseReiteration) {
+        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration, boolean mayCauseReiteration) {
             super(iteration);
             this.fromUpstream = fromUpstream;
             this.answerCache = answerCache;
@@ -224,11 +222,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             return cacheReader.poll();
         }
 
-        protected abstract FunctionalIterator<? extends Partial<?>> toUpstream(ANSWER conceptMap);
+        protected abstract FunctionalIterator<? extends Partial<?>> toUpstream(ANSWER answer);
 
         protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
 
-        public AnswerCache<ANSWER> answerCache() {
+        public AnswerCache<ANSWER, SUBSUMES> answerCache() {
             return answerCache;
         }
     }
@@ -236,8 +234,8 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
     // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
     // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
 
-    public static class CacheRegister<ANSWER> {
-        Map<ConceptMap, AnswerCache<ANSWER>> answerCaches;
+    public static class CacheRegister<ANSWER_CACHE extends AnswerCache<?, SUBSUMES>> {
+        Map<ConceptMap, ANSWER_CACHE> answerCaches;
         private int iteration;
 
         public CacheRegister(int iteration) {
@@ -259,11 +257,11 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
             answerCaches = new HashMap<>();
         }
 
-        public AnswerCache<ANSWER> get(ConceptMap fromUpstream) {
+        public ANSWER_CACHE get(ConceptMap fromUpstream) {
             return answerCaches.get(fromUpstream);
         }
 
-        void register(ConceptMap fromUpstream, AnswerCache<ANSWER> answerCache) {
+        void register(ConceptMap fromUpstream, AnswerCache<?, ?> answerCache) {
             assert !answerCaches.containsKey(fromUpstream);
             answerCaches.put(fromUpstream, answerCache);
         }

@@ -36,22 +36,23 @@ import java.util.Optional;
 import java.util.Set;
 
 import static grakn.common.collection.Collections.set;
+import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
 
-public abstract class AnswerCache<ANSWER> {
+public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
-    private final List<ANSWER> answers;
+    protected final List<ANSWER> answers;
     private final Set<ANSWER> answersSet;
-    private final Set<ConceptMap> subsumingCacheKeys;
+    protected final Set<ConceptMap> subsumingCacheKeys;
     private boolean reiterateOnNewAnswers;
     private boolean requiresReiteration;
     private FunctionalIterator<ANSWER> unexploredAnswers;
     private boolean complete;
-    private final Resolver.CacheRegister<ANSWER> cacheRegister;
+    protected final Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>> cacheRegister;
     private final ConceptMap state;
 
-    protected AnswerCache(Resolver.CacheRegister<ANSWER> cacheRegister, ConceptMap state, boolean useSubsumption) {
+    protected AnswerCache(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>> cacheRegister, ConceptMap state, boolean useSubsumption) {
         this.cacheRegister = cacheRegister;
         this.state = state;
         this.subsumingCacheKeys = useSubsumption ? getSubsumingCacheKeys(state) : set();
@@ -62,6 +63,10 @@ public abstract class AnswerCache<ANSWER> {
         this.requiresReiteration = false;
         this.complete = false;
         this.cacheRegister.register(state, this);
+    }
+
+    public ConceptMapCache asConceptMapCache() {
+        throw GraknException.of(ILLEGAL_CAST);
     }
 
     // TODO: cacheIfAbsent?
@@ -82,7 +87,6 @@ public abstract class AnswerCache<ANSWER> {
     public class Reader extends AbstractPoller<ANSWER> {
 
         private final boolean mayCauseReiteration;
-        private ANSWER next;
         private int index;
 
         public Reader(boolean mayCauseReiteration) {
@@ -137,7 +141,7 @@ public abstract class AnswerCache<ANSWER> {
 
     public boolean isComplete() {
         if (complete) return true;
-        Optional<AnswerCache<ANSWER>> subsumingCache;
+        Optional<AnswerCache<?, ANSWER>> subsumingCache;
         if ((subsumingCache = getCompletedSubsumingCache()).isPresent()) {
             completeFromSubsumer(subsumingCache.get());
             return true;
@@ -146,25 +150,16 @@ public abstract class AnswerCache<ANSWER> {
         }
     }
 
-    private Optional<AnswerCache<ANSWER>> getCompletedSubsumingCache() {
-        for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
-            if (cacheRegister.isRegistered(subsumingCacheKey)) {
-                AnswerCache<ANSWER> subsumingCache;
-                if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
-                    // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.
-                    return Optional.of(subsumingCache);
-                }
-            }
-        }
-        return Optional.empty();
-    }
+    protected abstract Optional<AnswerCache<?, ANSWER>> getCompletedSubsumingCache();
 
-    private void completeFromSubsumer(AnswerCache<ANSWER> subsumingCache) {
-        setCompletedAnswers(subsumingCache.answers);
+    private void completeFromSubsumer(AnswerCache<?, ANSWER> subsumingCache) {
+        setCompletedAnswers(subsumingCache.answers());
         complete = true;
         unexploredAnswers = Iterators.empty();
         if (subsumingCache.requiresReiteration()) setRequiresReiteration();
     }
+
+    protected abstract List<SUBSUMES> answers();
 
     private void setCompletedAnswers(List<ANSWER> completeAnswers) {
         List<ANSWER> subsumingAnswers = iterate(completeAnswers).filter(e -> subsumes(e, state)).toList();
@@ -200,5 +195,48 @@ public abstract class AnswerCache<ANSWER> {
         HashMap<Identifier.Variable.Retrievable, Concept> map = new HashMap<>();
         conceptsEntrySet.forEach(entry -> map.put(entry.getKey(), entry.getValue()));
         return new ConceptMap(map);
+    }
+
+    public static abstract class Subsumable<ANSWER, SUBSUMES> extends AnswerCache<ANSWER, SUBSUMES> {
+
+        protected Subsumable(Resolver.CacheRegister<? extends AnswerCache<?, SUBSUMES>> cacheRegister, ConceptMap state, boolean useSubsumption) {
+            super(cacheRegister, state, useSubsumption);
+        }
+    }
+
+    public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
+
+        public ConceptMapCache(Resolver.CacheRegister<? extends AnswerCache<?, ConceptMap>> cacheRegister, ConceptMap state, boolean useSubsumption) {
+            super(cacheRegister, state, useSubsumption);
+        }
+
+        @Override
+        protected Optional<AnswerCache<?, ConceptMap>> getCompletedSubsumingCache() {
+            for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
+                if (cacheRegister.isRegistered(subsumingCacheKey)) {
+                    AnswerCache<?, ConceptMap> subsumingCache;
+                    if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
+                        // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.
+                        return Optional.of(subsumingCache);
+                    }
+                }
+            }
+            return Optional.empty();
+        }
+
+        @Override
+        public ConceptMapCache asConceptMapCache() {
+            return this;
+        }
+
+        @Override
+        protected List<ConceptMap> answers() {
+            return answers;
+        }
+
+        @Override
+        protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
+            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
+        }
     }
 }

@@ -54,7 +54,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private final Map<Request, AnswerManager> answerManagers;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<Map<Identifier.Variable, Concept>>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<IdentifiedConceptsCache>> cacheRegisters;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -193,7 +193,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
+        CacheRegister<IdentifiedConceptsCache> cacheRegister = cacheRegisters.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean deduplicate;
@@ -206,7 +206,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             useSubsumption = true;
         }
 
-        AnswerCache<Map<Identifier.Variable, Concept>> answerCache;
+        AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);
         } else {
@@ -247,11 +247,30 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
 
     // TODO Needs a better name
-    private static class IdentifiedConceptsCache extends AnswerCache<Map<Identifier.Variable, Concept>> {
+    private static class IdentifiedConceptsCache extends AnswerCache.Subsumable<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
-        protected IdentifiedConceptsCache(CacheRegister<Map<Identifier.Variable, Concept>> cacheRegister,
+        protected IdentifiedConceptsCache(CacheRegister<IdentifiedConceptsCache> cacheRegister,
                                           ConceptMap state, boolean useSubsumption) {
             super(cacheRegister, state, useSubsumption);
+        }
+
+        @Override
+        protected Optional<AnswerCache<?, Map<Identifier.Variable, Concept>>> getCompletedSubsumingCache() {
+            for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
+                if (cacheRegister.isRegistered(subsumingCacheKey)) {
+                    AnswerCache<?, Map<Identifier.Variable, Concept>> subsumingCache;
+                    if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
+                        // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.
+                        return Optional.of(subsumingCache);
+                    }
+                }
+            }
+            return Optional.empty();
+        }
+
+        @Override
+        protected List<Map<Identifier.Variable, Concept>> answers() {
+            return answers;
         }
 
         @Override
@@ -260,7 +279,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
     }
 
-    private static class AnswerManager extends CachingAnswerManager<Map<Identifier.Variable, Concept>> {
+    private static class AnswerManager extends CachingAnswerManager<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
@@ -268,7 +287,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final boolean deduplicate;
 
 
-        public AnswerManager(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>> answerCache,
+        public AnswerManager(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache,
                              int iteration, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, false);
             this.deduplicate = deduplicate;

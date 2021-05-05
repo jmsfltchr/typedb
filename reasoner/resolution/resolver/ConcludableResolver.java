@@ -279,7 +279,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                     answerCache.cache(traversal);
                 }
                 boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
-                ConceptMapAnswerManager answerManager = new RuleExploringAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
+                ConceptMapAnswerManager answerManager = new RuleAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
                 registerRules(fromUpstream, answerManager.asExploration());
                 return answerManager;
             }
@@ -325,7 +325,71 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private class ExplainingAnswerManager extends AnswerManager.CachingAnswerManager<Partial.Concludable<?>, ConceptMap> implements Exploration {
+    private class ConceptMapAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
+
+        private final ProducedRecorder producedRecorder;
+        private final boolean deduplicate;
+
+        public ConceptMapAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
+                                       int iteration, boolean deduplicate, boolean mayCauseReiteration) {
+            super(fromUpstream, answerCache, iteration, mayCauseReiteration);
+            this.deduplicate = deduplicate;
+            this.producedRecorder = new ProducedRecorder();
+        }
+
+        @Override
+        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
+            if (deduplicate) return producedRecorder.record(conceptMap);
+            return false;
+        }
+
+        @Override
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
+            Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
+            assert !partial.isExplain();
+            assert partial.isMatch();
+            Partial.Compound<?, ?> upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
+            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
+            return Iterators.single(upstreamAnswer);
+        }
+
+    }
+
+    private class RuleAnswerManager extends ConceptMapAnswerManager implements Exploration {
+
+        private final DownstreamManager downstreamManager;
+        private final boolean singleAnswerRequired;
+
+        public RuleAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
+                                 int iteration, boolean singleAnswerRequired, boolean deduplicate) {
+            super(fromUpstream, answerCache, iteration, deduplicate, false);
+            this.downstreamManager = new DownstreamManager();
+            this.singleAnswerRequired = singleAnswerRequired;
+        }
+
+        public boolean isExploration() {
+            return true;
+        }
+
+        public Exploration asExploration() {
+            return this;
+        }
+
+        public DownstreamManager downstreamManager() { // TODO: Don't use this, move to use it from the new AnswerStateMachine
+            return downstreamManager;
+        }
+
+        public void newAnswer(Partial<?> partial, boolean requiresReiteration) {
+            answerCache.cache(partial.conceptMap());
+            if (requiresReiteration) answerCache.setRequiresReiteration();
+        }
+
+        public boolean singleAnswerRequired() {
+            return singleAnswerRequired;
+        }
+    }
+
+    private static class ExplainingAnswerManager extends AnswerManager.CachingAnswerManager<Partial.Concludable<?>, ConceptMap> implements Exploration {
 
         private final DownstreamManager downstreamManager;
 
@@ -370,79 +434,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         @Override
         protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
             return false;
-        }
-
-    }
-
-    private class ConceptMapAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
-
-        private final ProducedRecorder producedRecorder;
-        private final boolean deduplicate;
-
-        public ConceptMapAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                       int iteration, boolean deduplicate, boolean mayCauseReiteration) {
-            super(fromUpstream, answerCache, iteration, mayCauseReiteration);
-            this.deduplicate = deduplicate;
-            this.producedRecorder = new ProducedRecorder();
-        }
-
-        @Override
-        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
-            if (deduplicate) return producedRecorder.record(conceptMap);
-            return false;
-        }
-
-        @Override
-        protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
-            Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
-            assert !partial.isExplain();
-            assert partial.isMatch();
-            Partial.Compound<?, ?> upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
-            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
-            return Iterators.single(upstreamAnswer);
-        }
-
-    }
-
-    private class RuleExploringAnswerManager extends ConceptMapAnswerManager implements Exploration {
-
-        private final DownstreamManager downstreamManager;
-        private final boolean singleAnswerRequired;
-
-        public RuleExploringAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                          int iteration, boolean singleAnswerRequired, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration, deduplicate, false);
-            this.downstreamManager = new DownstreamManager();
-            this.singleAnswerRequired = singleAnswerRequired;
-        }
-
-        public boolean isExploration() {
-            return true;
-        }
-
-        public Exploration asExploration() {
-            return this;
-        }
-
-        public DownstreamManager downstreamManager() { // TODO: Don't use this, move to use it from the new AnswerStateMachine
-            return downstreamManager;
-        }
-
-        public void newAnswer(Partial<?> partial, boolean requiresReiteration) {
-            answerCache.cache(partial.conceptMap());
-            if (requiresReiteration) answerCache.setRequiresReiteration();
-        }
-
-        public boolean singleAnswerRequired() {
-            return singleAnswerRequired;
-        }
-    }
-
-    private class RetrievalAnswerManager extends ConceptMapAnswerManager {
-
-        public RetrievalAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                      int iteration, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration, deduplicate, true);
         }
 
     }

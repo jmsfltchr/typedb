@@ -34,7 +34,6 @@ import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConcludableExplanationCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
-import grakn.core.reasoner.resolution.framework.AnswerManager;
 import grakn.core.reasoner.resolution.framework.AnswerManager.CachingAnswerManager;
 import grakn.core.reasoner.resolution.framework.AnswerManager.Exploration;
 import grakn.core.reasoner.resolution.framework.Request;
@@ -118,10 +117,12 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert answerManager.isExploration();
         answerManager.asExploration().newAnswer(fromDownstream.answer(), fromDownstream.answer().requiresReiteration());
 
-        if (iteration == answerManager.iteration()) {
-            nextAnswer(fromUpstream, answerManager, iteration);
-        } else {
+        if (iteration < answerManager.iteration()) {
+            // short circuit if the request came from a prior iteration
             failToUpstream(fromUpstream, iteration);
+        } else {
+            assert iteration == answerManager.iteration();
+            nextAnswer(fromUpstream, answerManager, iteration);
         }
     }
 
@@ -154,10 +155,13 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (iteration < answerManager.iteration()) {
             // short circuit old iteration failed messages to upstream
             failToUpstream(fromUpstream, iteration);
-            return;
+        } else {
+            assert iteration == answerManager.iteration();
+            if (answerManager.isExploration()) {
+                answerManager.asExploration().downstreamManager().removeDownstream(fromDownstream.sourceRequest());
+            }
+            nextAnswer(fromUpstream, answerManager, iteration);
         }
-        if (answerManager.isExploration()) answerManager.asExploration().downstreamManager().removeDownstream(fromDownstream.sourceRequest());
-        nextAnswer(fromUpstream, answerManager, iteration);
     }
 
     @Override
@@ -343,8 +347,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         @Override
         protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
-            assert !partial.isExplain();
-            assert partial.isMatch();
+            assert !partial.isExplain() && partial.isMatch(); // TODO: Can the typing be tightened up to remove these assertions?
             Partial.Compound<?, ?> upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
             if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
             return Iterators.single(upstreamAnswer);

@@ -59,7 +59,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final Map<Driver<ConclusionResolver>, Rule> resolverRules;
     private final grakn.core.logic.resolvable.Concludable concludable;
     private final LogicManager logicMgr;
-    private final Map<Driver<? extends Resolver<?>>, RecursionState> recursionStates;
     private final Map<Request, CachingAnswerManager<?, ConceptMap>> answerManagers;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
@@ -74,7 +73,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         this.concludable = concludable;
         this.applicableRules = new LinkedHashMap<>();
         this.resolverRules = new HashMap<>();
-        this.recursionStates = new HashMap<>();
         this.answerManagers = new HashMap<>();
         this.unboundVars = unboundVars(concludable.pattern());
         this.isInitialised = false;
@@ -165,7 +163,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     public void terminate(Throwable cause) {
         super.terminate(cause);
         answerManagers.clear();
-        recursionStates.clear();
     }
 
     @Override
@@ -248,9 +245,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         LOG.debug("{}: Creating new Responses for iteration{}, request: {}", name(), iteration, fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        recursionStates.putIfAbsent(root, new RecursionState(iteration));
-
-        RecursionState recursionState = getOrCreateRecursionState(root, iteration);
         CacheRegister<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
 
@@ -265,13 +259,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                         .map(ans -> fromUpstream.partialAnswer().asConcludable().asExplain());
                 answerCache.cache(traversal);
             }
-            recursionState.recordReceived(answerFromUpstream);
             ExplainingAnswerManager answerManager = new ExplainingAnswerManager(fromUpstream, answerCache, iteration, false);
             registerRules(fromUpstream, answerManager.asExploration());
             return answerManager;
 
         } else {
-            assert cacheRegister.isRegistered(answerFromUpstream) == recursionState.hasReceived(answerFromUpstream); // TODO: Should be the same, and therefore can remove this part of recursionState
             if (cacheRegister.isRegistered(answerFromUpstream)) {
                 AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream); // TODO: It's possible the cache we get here uses subsumption, but that we shouldn't if we're explaining
                 // TODO: can we always cast to a ConceptMapCache?
@@ -284,7 +276,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                     FunctionalIterator<ConceptMap> traversal = traversalIterator(concludable.pattern(), answerFromUpstream);
                     answerCache.cache(traversal);
                 }
-                recursionState.recordReceived(fromUpstream.partialAnswer().conceptMap());
                 boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
                 ConceptMapAnswerManager answerManager = new RuleExploringAnswerManager(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
                 registerRules(fromUpstream, answerManager.asExploration());
@@ -300,15 +291,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             cacheRegister.nextIteration(iteration);
         }
         return cacheRegister;
-    }
-
-    private RecursionState getOrCreateRecursionState(Driver<? extends Resolver<?>> root, int iteration) {
-        recursionStates.putIfAbsent(root, new RecursionState(iteration));
-        RecursionState recursionState = recursionStates.get(root);
-        if (recursionState.iteration() < iteration) {
-            recursionState.nextIteration(iteration);
-        }
-        return recursionState;
     }
 
     private void registerRules(Request fromUpstream, Exploration exploration) {
@@ -463,37 +445,4 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     }
 
-    /**
-     * Maintain iteration state per root query
-     * This allows us to share resolvers across different queries
-     * while maintaining the ability to do loop termination within a single query
-     */
-    private static class RecursionState {
-        // TODO: Should, again, be unneeded
-        private Set<ConceptMap> receivedMaps;
-        private int iteration;
-
-        RecursionState(int iteration) {
-            this.iteration = iteration;
-            this.receivedMaps = new HashSet<>();
-        }
-
-        public int iteration() {
-            return iteration;
-        }
-
-        public void nextIteration(int newIteration) {
-            assert newIteration > iteration;
-            iteration = newIteration;
-            receivedMaps = new HashSet<>();
-        }
-
-        public void recordReceived(ConceptMap conceptMap) {
-            receivedMaps.add(conceptMap);
-        }
-
-        public boolean hasReceived(ConceptMap conceptMap) {
-            return receivedMaps.contains(conceptMap);
-        }
-    }
 }

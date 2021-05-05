@@ -28,6 +28,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
+import grakn.core.reasoner.resolution.framework.AnswerManager;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -47,7 +48,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
     private static final Logger LOG = LoggerFactory.getLogger(RetrievableResolver.class);
 
     private final Retrievable retrievable;
-    private final Map<Request, AnswerManager> answerManagers;
+    private final Map<Request, RetrievableAnswerManager> answerManagers;
     protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMapCache, ConceptMap>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
@@ -64,7 +65,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         LOG.trace("{}: received Request: {}", name(), fromUpstream);
         if (isTerminated()) return;
 
-        AnswerManager answerManager = getOrReplaceRequestState(fromUpstream, iteration);
+        RetrievableAnswerManager answerManager = getOrReplaceRequestState(fromUpstream, iteration);
         if (iteration < answerManager.iteration()) {
             // short circuit old iteration failed messages to upstream
             failToUpstream(fromUpstream, iteration);
@@ -89,22 +90,22 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         throw GraknException.of(ILLEGAL_STATE);
     }
 
-    private AnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
+    private RetrievableAnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!answerManagers.containsKey(fromUpstream)) {
             answerManagers.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
-            AnswerManager answerManager = this.answerManagers.get(fromUpstream);
+            RetrievableAnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
             if (answerManager.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                AnswerManager responseProducerNextIter = createRequestState(fromUpstream, iteration);
+                RetrievableAnswerManager responseProducerNextIter = createRequestState(fromUpstream, iteration);
                 this.answerManagers.put(fromUpstream, responseProducerNextIter);
             }
         }
         return answerManagers.get(fromUpstream);
     }
 
-    protected AnswerManager createRequestState(Request fromUpstream, int iteration) {
+    protected RetrievableAnswerManager createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ResponseProducer for iteration:{}, request: {}", name(), iteration, fromUpstream);
         assert fromUpstream.partialAnswer().isRetrievable();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
@@ -119,10 +120,10 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             cacheRegister.register(answerFromUpstream, answerCache);
             if (!answerCache.isComplete()) answerCache.cache(traversalIterator(retrievable.pattern(), answerFromUpstream));
         }
-        return new AnswerManager(fromUpstream, answerCache, iteration);
+        return new RetrievableAnswerManager(fromUpstream, answerCache, iteration);
     }
 
-    private void nextAnswer(Request fromUpstream, AnswerManager responseProducer, int iteration) {
+    private void nextAnswer(Request fromUpstream, RetrievableAnswerManager responseProducer, int iteration) {
         Optional<Partial.Compound<?, ?>> upstreamAnswer = responseProducer.nextAnswer().map(Partial::asCompound);
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
@@ -132,9 +133,9 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class AnswerManager extends CachingAnswerManager<ConceptMap, ConceptMap> {
+    private static class RetrievableAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
 
-        public AnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
+        public RetrievableAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration, true); // TODO do we want this to cause reiteration?
         }
 

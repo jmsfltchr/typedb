@@ -32,6 +32,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConcludableExplanationCache;
+import grakn.core.reasoner.resolution.framework.AnswerManager;
 import grakn.core.reasoner.resolution.framework.AnswerManager.Exploration;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
@@ -59,7 +60,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final Map<Driver<ConclusionResolver>, Rule> resolverRules;
     private final grakn.core.logic.resolvable.Concludable concludable;
     private final LogicManager logicMgr;
-    private final Map<Request, CachingAnswerManager<?, ConceptMap>> answerManagers;
+    private final Map<Request, AnswerManager.CachingAnswerManager<?, ConceptMap>> answerManagers;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
     protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<AnswerCache<?, ConceptMap>, ConceptMap>> cacheRegisters;
@@ -91,7 +92,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 //        requestStateMachine.receivedIteration(iteration);
 //        requestStateMachine.proceed();
 
-        CachingAnswerManager<?, ConceptMap> requestState = getOrReplaceRequestState(fromUpstream, iteration);
+        AnswerManager.CachingAnswerManager<?, ConceptMap> requestState = getOrReplaceRequestState(fromUpstream, iteration);
         if (iteration < requestState.iteration()) {
             // short circuit if the request came from a prior iteration
             failToUpstream(fromUpstream, iteration);
@@ -108,7 +109,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
+        AnswerManager.CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
 
         // assert cacheRegisters.get(fromUpstream.partialAnswer().root()).isRegistered(fromUpstream.partialAnswer().conceptMap()); // TODO: This throws in "conjunctions of untyped reasoned relations are correctly resolved" but without consequence
         assert answerManager.isExploration();
@@ -133,7 +134,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     we respond for all N ahead of time. Then, when the rules actually return an answer to this concludable, we do nothing.
      */
     private void answerFound(Partial.Compound<?, ?> upstreamAnswer, Request fromUpstream, int iteration) {
-        CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
+        AnswerManager.CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
         if (answerManager.isExploration() && answerManager.asExploration().singleAnswerRequired()) {
             answerManager.asExploration().downstreamManager().clearDownstreams();
             // TODO: Should we set the cache complete here (and is that correct?), or is that already achieved implicitly?
@@ -148,7 +149,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
+        AnswerManager.CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
 
         if (iteration < answerManager.iteration()) {
             // short circuit old iteration failed messages to upstream
@@ -183,7 +184,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (!isTerminated()) isInitialised = true;
     }
 
-    private void nextAnswer(Request fromUpstream, CachingAnswerManager<?, ConceptMap> answerManager, int iteration) {
+    private void nextAnswer(Request fromUpstream, AnswerManager.CachingAnswerManager<?, ConceptMap> answerManager, int iteration) {
         if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
             Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound); // TODO: This returns a partial, but it won't contain the correct explanation yet
             if (upstreamAnswer.isPresent()) {
@@ -216,23 +217,23 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    private CachingAnswerManager<?, ConceptMap> getOrReplaceRequestState(Request fromUpstream, int iteration) {
+    private AnswerManager.CachingAnswerManager<?, ConceptMap> getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!answerManagers.containsKey(fromUpstream)) {
-            CachingAnswerManager<?, ConceptMap> answerManager = createRequestState(fromUpstream, iteration);
+            AnswerManager.CachingAnswerManager<?, ConceptMap> answerManager = createRequestState(fromUpstream, iteration);
             answerManagers.put(fromUpstream, answerManager);
         } else {
-            CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
+            AnswerManager.CachingAnswerManager<?, ConceptMap> answerManager = this.answerManagers.get(fromUpstream);
 
             if (answerManager.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                CachingAnswerManager<?, ConceptMap> newAnswerManager = createRequestState(fromUpstream, iteration);
+                AnswerManager.CachingAnswerManager<?, ConceptMap> newAnswerManager = createRequestState(fromUpstream, iteration);
                 this.answerManagers.put(fromUpstream, newAnswerManager);
             }
         }
         return answerManagers.get(fromUpstream);
     }
 
-    protected CachingAnswerManager<?, ConceptMap> createRequestState(Request fromUpstream, int iteration) {
+    protected AnswerManager.CachingAnswerManager<?, ConceptMap> createRequestState(Request fromUpstream, int iteration) {
 
 //        Consumer<AnswerState> onSendUpstream = (answer) -> answerToUpstream(answer, fromUpstream, iteration);
 //        Supplier<Void> onFail = () -> { failToUpstream(fromUpstream, iteration); return null; };
@@ -323,7 +324,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private class ExplainingAnswerManager extends CachingAnswerManager<Partial.Concludable<?>, ConceptMap> implements Exploration {
+    private class ExplainingAnswerManager extends AnswerManager.CachingAnswerManager<Partial.Concludable<?>, ConceptMap> implements Exploration {
 
         private final DownstreamManager downstreamManager;
 
@@ -372,7 +373,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     }
 
-    private abstract class ConceptMapAnswerManager extends CachingAnswerManager<ConceptMap, ConceptMap> {
+    private abstract class ConceptMapAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
 
         private final ProducedRecorder producedRecorder;
         private final boolean deduplicate;

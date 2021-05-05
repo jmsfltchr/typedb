@@ -202,35 +202,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
-    protected abstract static class CachingAnswerManager<ANSWER, SUBSUMES> extends AnswerManager {
-
-        protected final Request fromUpstream;
-        protected final AnswerCache<ANSWER, SUBSUMES> answerCache;
-        protected final boolean mayCauseReiteration;
-        protected Poller<? extends Partial<?>> cacheReader;
-
-        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration, boolean mayCauseReiteration) {
-            super(iteration);
-            this.fromUpstream = fromUpstream;
-            this.answerCache = answerCache;
-            this.mayCauseReiteration = mayCauseReiteration;
-            this.cacheReader = answerCache.reader(mayCauseReiteration)
-                    .flatMap(answer -> toUpstream(answer).filter(partial -> !optionallyDeduplicate(partial.conceptMap())));
-        }
-
-        public Optional<? extends Partial<?>> nextAnswer() {
-            return cacheReader.poll();
-        }
-
-        protected abstract FunctionalIterator<? extends Partial<?>> toUpstream(ANSWER answer);
-
-        protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
-
-        public AnswerCache<ANSWER, SUBSUMES> answerCache() {
-            return answerCache;
-        }
-    }
-
     // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
     // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
 

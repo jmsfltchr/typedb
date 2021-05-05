@@ -30,6 +30,7 @@ import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
 import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable;
 import grakn.core.reasoner.resolution.framework.AnswerManager;
+import grakn.core.reasoner.resolution.framework.AnswerManager.CachingAnswerManager;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -283,20 +284,17 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
     }
 
-    private static class ConclusionAnswerManager extends AnswerManager.CachingAnswerManager<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
+    // TODO: Change to not extend CachingAnswerManager, to no longer do caching (for now)
+    private static class ConclusionAnswerManager extends CachingAnswerManager<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
         private final DownstreamManager downstreamManager;
-        private final ProducedRecorder producedRecorder;
         private final List<FunctionalIterator<Partial.Concludable<?>>> materialisedAnswers;
-        private final boolean deduplicate;
 
         public ConclusionAnswerManager(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache,
                                        int iteration, boolean deduplicate) {
-            super(fromUpstream, answerCache, iteration, false);
-            this.deduplicate = deduplicate;
+            super(fromUpstream, answerCache, iteration, false, deduplicate);
             this.materialisedAnswers = new LinkedList<>();
             this.downstreamManager = new DownstreamManager();
-            this.producedRecorder = new ProducedRecorder();
         }
 
         public DownstreamManager downstreamManager() {
@@ -310,12 +308,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                 if (answerCache.requiresReiteration()) p.setRequiresReiteration();
                 return p;
             });
-        }
-
-        @Override
-        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
-            if (deduplicate) return producedRecorder.record(conceptMap);
-            return false;
         }
 
         public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {

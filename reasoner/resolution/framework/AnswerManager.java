@@ -34,9 +34,13 @@ import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
 
 public abstract class AnswerManager {
 
+    protected final Request fromUpstream;
     private final int iteration;
 
-    protected AnswerManager(int iteration) {this.iteration = iteration;}
+    protected AnswerManager(Request fromUpstream, int iteration) {
+        this.fromUpstream = fromUpstream;
+        this.iteration = iteration;
+    }
 
     public abstract Optional<? extends AnswerState.Partial<?>> nextAnswer();
 
@@ -62,18 +66,25 @@ public abstract class AnswerManager {
 
     public abstract static class CachingAnswerManager<ANSWER, SUBSUMES> extends AnswerManager {
 
-        protected final Request fromUpstream;
         protected final AnswerCache<ANSWER, SUBSUMES> answerCache;
         protected final boolean mayCauseReiteration;
         protected Poller<? extends AnswerState.Partial<?>> cacheReader;
+        protected final ProducedRecorder producedRecorder;
 
-        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration, boolean mayCauseReiteration) {
-            super(iteration);
-            this.fromUpstream = fromUpstream;
+        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration,
+                                    boolean mayCauseReiteration, boolean deduplicate) {
+            super(fromUpstream, iteration);
             this.answerCache = answerCache;
             this.mayCauseReiteration = mayCauseReiteration;
-            this.cacheReader = answerCache.reader(mayCauseReiteration)
-                    .flatMap(answer -> toUpstream(answer).filter(partial -> !optionallyDeduplicate(partial.conceptMap())));
+            // TODO: Needs to account for the user supplying a produced set to initialise
+            this.producedRecorder = deduplicate ? new ProducedRecorder() : null;
+
+            if (deduplicate) {
+                this.cacheReader = answerCache.reader(mayCauseReiteration).flatMap(
+                        answer -> toUpstream(answer).filter(partial ->!producedRecorder.record(partial.conceptMap())));
+            } else {
+                this.cacheReader = answerCache.reader(mayCauseReiteration).flatMap(this::toUpstream);
+            }
         }
 
         public Optional<? extends AnswerState.Partial<?>> nextAnswer() {
@@ -82,13 +93,12 @@ public abstract class AnswerManager {
 
         protected abstract FunctionalIterator<? extends AnswerState.Partial<?>> toUpstream(ANSWER answer);
 
-        protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
-
         public AnswerCache<ANSWER, SUBSUMES> answerCache() {
             return answerCache;
         }
     }
 
+    // TODO: Rename to "Deduplicator"
     public static class ProducedRecorder {
         private final Set<ConceptMap> produced;
 

@@ -137,7 +137,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
     private static class RetrievableAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
 
         public RetrievableAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
-            super(fromUpstream, answerCache, iteration, true); // TODO do we want this to cause reiteration?
+            super(fromUpstream, answerCache, iteration, true, false); // TODO do we want this to cause reiteration?
         }
 
         @Override
@@ -146,11 +146,6 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(answer);
             if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
             return Iterators.single(upstreamAnswer);
-        }
-
-        @Override
-        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
-            return false;
         }
 
     }

@@ -328,20 +328,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     private class ConceptMapAnswerManager extends CachingAnswerManager<ConceptMap, ConceptMap> {
 
-        private final ProducedRecorder producedRecorder;
-        private final boolean deduplicate;
 
         public ConceptMapAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
                                        int iteration, boolean deduplicate, boolean mayCauseReiteration) {
-            super(fromUpstream, answerCache, iteration, mayCauseReiteration);
-            this.deduplicate = deduplicate;
-            this.producedRecorder = new ProducedRecorder();
-        }
-
-        @Override
-        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
-            if (deduplicate) return producedRecorder.record(conceptMap);
-            return false;
+            super(fromUpstream, answerCache, iteration, mayCauseReiteration, deduplicate);
         }
 
         @Override
@@ -395,7 +385,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public ExplainingAnswerManager(Request fromUpstream, AnswerCache<Partial.Concludable<?>, ConceptMap> answerCache,
                                        int iteration, boolean mayCauseReiteration) {
-            super(fromUpstream, answerCache, iteration, mayCauseReiteration);
+            super(fromUpstream, answerCache, iteration, mayCauseReiteration, false);
             this.downstreamManager = new DownstreamManager();
         }
 
@@ -429,11 +419,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 return Iterators.single(upstreamAnswer);
             }
             return Iterators.empty();
-        }
-
-        @Override
-        protected boolean optionallyDeduplicate(ConceptMap conceptMap) {
-            return false;
         }
 
     }

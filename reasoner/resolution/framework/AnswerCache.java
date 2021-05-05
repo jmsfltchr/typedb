@@ -75,7 +75,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
     }
 
     public void cache(FunctionalIterator<ANSWER> newAnswers) {
-        assert !isComplete();
+        // assert !isComplete(); // TODO: Removed to allow additional answers to propagate upstream, which crucially may be carrying requiresReiteration flags
         unexploredAnswers = unexploredAnswers.link(newAnswers);
     }
 

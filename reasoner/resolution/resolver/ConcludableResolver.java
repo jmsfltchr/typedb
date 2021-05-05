@@ -118,10 +118,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert answerManager.isExploration();
         answerManager.asExploration().newAnswer(fromDownstream.answer(), fromDownstream.answer().requiresReiteration());
 
-        if (fromDownstream.answer().asConcludable().isExplain()) {
-            // TODO: We skip the cache here, which we don't elsewhere
-            answerFound(fromDownstream.answer().asConcludable().toUpstreamInferred(), fromUpstream, iteration);
-        } else if (iteration == answerManager.iteration()) {
+        if (iteration == answerManager.iteration()) {
             nextAnswer(fromUpstream, answerManager, iteration);
         } else {
             failToUpstream(fromUpstream, iteration);

@@ -27,6 +27,7 @@ import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.Resolver.CacheRegister;
 import grakn.core.traversal.common.Identifier;
 
 import java.util.ArrayList;
@@ -49,10 +50,10 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
     private boolean requiresReiteration;
     protected FunctionalIterator<ANSWER> unexploredAnswers;
     protected boolean complete;
-    protected final Register<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister;
+    protected final CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister;
     protected final ConceptMap state;
 
-    protected AnswerCache(Register<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
+    protected AnswerCache(CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
         this.cacheRegister = cacheRegister;
         this.state = state;
         this.unexploredAnswers = Iterators.empty();
@@ -80,39 +81,6 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public Poller<ANSWER> reader(boolean mayCauseReiteration) {
         return new Reader(mayCauseReiteration);
-    }
-
-    public static class Register<ANSWER_CACHE extends AnswerCache<?, SUBSUMES>, SUBSUMES> {
-        Map<ConceptMap, ANSWER_CACHE> answerCaches;
-        private int iteration;
-
-        public Register(int iteration) {
-            this.iteration = iteration;
-            this.answerCaches = new HashMap<>();
-        }
-
-        public void register(ConceptMap fromUpstream, ANSWER_CACHE answerCache) {
-            assert !answerCaches.containsKey(fromUpstream);
-            answerCaches.put(fromUpstream, answerCache);
-        }
-
-        public boolean isRegistered(ConceptMap conceptMap) {
-            return answerCaches.containsKey(conceptMap);
-        }
-
-        public int iteration() {
-            return iteration;
-        }
-
-        public void nextIteration(int newIteration) {
-            assert newIteration > iteration;
-            iteration = newIteration;
-            answerCaches = new HashMap<>();
-        }
-
-        public ANSWER_CACHE get(ConceptMap fromUpstream) {
-            return answerCaches.get(fromUpstream);
-        }
     }
 
     public class Reader extends AbstractPoller<ANSWER> {
@@ -207,7 +175,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public static class ConcludableExplanationCache extends AnswerCache<Partial.Concludable<?>, ConceptMap> {
 
-        public ConcludableExplanationCache(Register<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
+        public ConcludableExplanationCache(CacheRegister<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
             super(cacheRegister, state);
         }
 
@@ -222,7 +190,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
         protected final Set<ConceptMap> subsumingCacheKeys;
 
-        protected Subsumable(Register<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
+        protected Subsumable(CacheRegister<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
             super(cacheRegister, state);
             this.subsumingCacheKeys = getSubsumingCacheKeys(state);
         }
@@ -257,7 +225,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
 
-        public ConceptMapCache(Register<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
+        public ConceptMapCache(CacheRegister<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
             super(cacheRegister, state);
         }
 

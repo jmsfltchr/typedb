@@ -202,8 +202,96 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return traversal;
     }
 
+    protected abstract static class CachingAnswerManager<ANSWER, SUBSUMES> extends AnswerManager {
+
+        protected final Request fromUpstream;
+        protected final AnswerCache<ANSWER, SUBSUMES> answerCache;
+        protected final boolean mayCauseReiteration;
+        protected Poller<? extends Partial<?>> cacheReader;
+
+        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration, boolean mayCauseReiteration) {
+            super(iteration);
+            this.fromUpstream = fromUpstream;
+            this.answerCache = answerCache;
+            this.mayCauseReiteration = mayCauseReiteration;
+            this.cacheReader = answerCache.reader(mayCauseReiteration)
+                    .flatMap(answer -> toUpstream(answer).filter(partial -> !optionallyDeduplicate(partial.conceptMap())));
+        }
+
+        public Optional<? extends Partial<?>> nextAnswer() {
+            return cacheReader.poll();
+        }
+
+        protected abstract FunctionalIterator<? extends Partial<?>> toUpstream(ANSWER answer);
+
+        protected abstract boolean optionallyDeduplicate(ConceptMap conceptMap);
+
+        public AnswerCache<ANSWER, SUBSUMES> answerCache() {
+            return answerCache;
+        }
+    }
+
     // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
     // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
+
+    public static class CacheRegister<ANSWER_CACHE extends AnswerCache<?, SUBSUMES>, SUBSUMES> {
+        Map<ConceptMap, ANSWER_CACHE> answerCaches;
+        private int iteration;
+
+        public CacheRegister(int iteration) {
+            this.iteration = iteration;
+            this.answerCaches = new HashMap<>();
+        }
+
+        public void register(ConceptMap fromUpstream, ANSWER_CACHE answerCache) {
+            assert !answerCaches.containsKey(fromUpstream);
+            answerCaches.put(fromUpstream, answerCache);
+        }
+
+        public boolean isRegistered(ConceptMap conceptMap) {
+            return answerCaches.containsKey(conceptMap);
+        }
+
+        public int iteration() {
+            return iteration;
+        }
+
+        public void nextIteration(int newIteration) {
+            assert newIteration > iteration;
+            iteration = newIteration;
+            answerCaches = new HashMap<>();
+        }
+
+        public ANSWER_CACHE get(ConceptMap fromUpstream) {
+            return answerCaches.get(fromUpstream);
+        }
+    }
+
+    public static class ProducedRecorder {
+        private final Set<ConceptMap> produced;
+
+        public ProducedRecorder() {
+            this(new HashSet<>());
+        }
+
+        public ProducedRecorder(Set<ConceptMap> produced) {
+            this.produced = produced;
+        }
+
+        public boolean record(ConceptMap conceptMap) {
+            if (produced.contains(conceptMap)) return true;
+            produced.add(conceptMap);
+            return false;
+        }
+
+        public boolean hasRecorded(ConceptMap conceptMap) { // TODO method shouldn't be needed
+            return produced.contains(conceptMap);
+        }
+
+        public Set<ConceptMap> recorded() {
+            return produced;
+        }
+    }
 
     public static class DownstreamManager {
         private final LinkedHashSet<Request> downstreams;

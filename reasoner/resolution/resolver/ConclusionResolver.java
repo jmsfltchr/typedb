@@ -28,7 +28,6 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable;
-import grakn.core.reasoner.resolution.framework.AnswerManager.CachingAnswerManager;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -53,10 +52,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private static final Logger LOG = LoggerFactory.getLogger(ConclusionResolver.class);
 
     private final Rule.Conclusion conclusion;
-    private final Map<Request, ConclusionAnswerManager> answerManagers;
+    private final Map<Request, AnswerManager> answerManagers;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, AnswerCache.Register<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>>> cacheRegisters;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -74,7 +73,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         if (!isInitialised) initialiseDownstreamResolvers();
         if (isTerminated()) return;
 
-        ConclusionAnswerManager answerManager = getOrReplaceRequestState(fromUpstream, iteration);
+        AnswerManager answerManager = getOrReplaceRequestState(fromUpstream, iteration);
 
         if (iteration < answerManager.iteration()) {
             // short circuit if the request came from a prior iteration
@@ -92,7 +91,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        ConclusionAnswerManager answerManager = this.answerManagers.get(fromUpstream);
+        AnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
         if (fromUpstream.partialAnswer().asConclusion().isExplain()) {  //TODO: Should we use the upstream or downstream to determine whether to explain?
             FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
@@ -127,7 +126,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        ConclusionAnswerManager answerManager = this.answerManagers.get(fromUpstream);
+        AnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
         if (iteration < answerManager.iteration()) {
             // short circuit old iteration fail messages to upstream
@@ -156,7 +155,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
     }
 
-    private void nextAnswer(Request fromUpstream, ConclusionAnswerManager answerManager, int iteration) {
+    private void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration) {
         if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
             if (answerManager.downstreamManager().hasDownstream()) {
                 requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
@@ -176,26 +175,26 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
     }
 
-    private ConclusionAnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
+    private AnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
         if (!answerManagers.containsKey(fromUpstream)) {
             answerManagers.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
-            ConclusionAnswerManager answerManager = this.answerManagers.get(fromUpstream);
+            AnswerManager answerManager = this.answerManagers.get(fromUpstream);
 
             if (answerManager.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                ConclusionAnswerManager answerManagerNextIter = createRequestState(fromUpstream, iteration);
+                AnswerManager answerManagerNextIter = createRequestState(fromUpstream, iteration);
                 this.answerManagers.put(fromUpstream, answerManagerNextIter);
             }
         }
         return answerManagers.get(fromUpstream);
     }
 
-    private ConclusionAnswerManager createRequestState(Request fromUpstream, int iteration) {
+    private AnswerManager createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheRegisters.putIfAbsent(root, new AnswerCache.Register<>(iteration));
-        AnswerCache.Register<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
+        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
+        CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean deduplicate;
@@ -215,7 +214,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             answerCache = new IdentifiedConceptsCache(cacheRegister, answerFromUpstream);
             cacheRegister.register(answerFromUpstream, answerCache);
         }
-        ConclusionAnswerManager answerManager = new ConclusionAnswerManager(fromUpstream, answerCache, iteration, deduplicate);
+        AnswerManager answerManager = new AnswerManager(fromUpstream, answerCache, iteration, deduplicate);
         assert fromUpstream.partialAnswer().isConclusion();
         Partial.Conclusion<?, ?> partialAnswer = fromUpstream.partialAnswer().asConclusion();
         // we do a extra traversal to expand the partial answer if we already have the concept that is meant to be generated
@@ -252,7 +251,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     // TODO Needs a better name
     private static class IdentifiedConceptsCache extends Subsumable<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
-        protected IdentifiedConceptsCache(Register<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister,
+        protected IdentifiedConceptsCache(CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister,
                                           ConceptMap state) {
             super(cacheRegister, state);
         }
@@ -282,7 +281,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         }
     }
 
-    private static class ConclusionAnswerManager extends CachingAnswerManager<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
+    private static class AnswerManager extends CachingAnswerManager<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
@@ -290,8 +289,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final boolean deduplicate;
 
 
-        public ConclusionAnswerManager(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache,
-                                       int iteration, boolean deduplicate) {
+        public AnswerManager(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache,
+                             int iteration, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, false);
             this.deduplicate = deduplicate;
             this.materialisedAnswers = new LinkedList<>();

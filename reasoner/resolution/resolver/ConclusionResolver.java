@@ -27,6 +27,7 @@ import grakn.core.logic.Rule;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
 import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable;
 import grakn.core.reasoner.resolution.framework.AnswerManager;
 import grakn.core.reasoner.resolution.framework.Request;
@@ -56,7 +57,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private final Map<Request, ConclusionAnswerManager> answerManagers;
     private Driver<ConditionResolver> ruleResolver;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, Register<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>>> cacheRegisters;
 
     public ConclusionResolver(Driver<ConclusionResolver> driver, Rule.Conclusion conclusion, ResolverRegistry registry,
                               TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -194,8 +195,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     private ConclusionAnswerManager createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ConclusionResponse for request: {}", name(), fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
+        cacheRegisters.putIfAbsent(root, new Register<>(iteration));
+        Register<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister = cacheRegisters.get(root);
 
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         boolean deduplicate;
@@ -252,7 +253,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     // TODO Needs a better name
     private static class IdentifiedConceptsCache extends Subsumable<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> {
 
-        protected IdentifiedConceptsCache(CacheRegister<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister,
+        protected IdentifiedConceptsCache(Register<IdentifiedConceptsCache, Map<Identifier.Variable, Concept>> cacheRegister,
                                           ConceptMap state) {
             super(cacheRegister, state);
         }

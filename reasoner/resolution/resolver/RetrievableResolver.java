@@ -28,6 +28,7 @@ import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
 import grakn.core.reasoner.resolution.framework.AnswerManager;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
@@ -49,7 +50,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RetrievableAnswerManager> answerManagers;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, CacheRegister<ConceptMapCache, ConceptMap>> cacheRegisters;
+    protected final Map<Actor.Driver<? extends Resolver<?>>, Register<ConceptMapCache, ConceptMap>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -110,8 +111,8 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         assert fromUpstream.partialAnswer().isRetrievable();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheRegisters.putIfAbsent(root, new CacheRegister<>(iteration));
-        CacheRegister<ConceptMapCache, ConceptMap> cacheRegister = cacheRegisters.get(root);
+        cacheRegisters.putIfAbsent(root, new Register<>(iteration));
+        Register<ConceptMapCache, ConceptMap> cacheRegister = cacheRegisters.get(root);
         ConceptMapCache answerCache;
         if (cacheRegister.isRegistered(answerFromUpstream)) {
             answerCache = cacheRegister.get(answerFromUpstream);

@@ -25,7 +25,9 @@ import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.framework.Resolver.DownstreamManager;
 
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 import static grakn.common.util.Objects.className;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
@@ -84,6 +86,32 @@ public abstract class AnswerManager {
 
         public AnswerCache<ANSWER, SUBSUMES> answerCache() {
             return answerCache;
+        }
+    }
+
+    public static class ProducedRecorder {
+        private final Set<ConceptMap> produced;
+
+        public ProducedRecorder() {
+            this(new HashSet<>());
+        }
+
+        public ProducedRecorder(Set<ConceptMap> produced) {
+            this.produced = produced;
+        }
+
+        public boolean record(ConceptMap conceptMap) {
+            if (produced.contains(conceptMap)) return true;
+            produced.add(conceptMap);
+            return false;
+        }
+
+        public boolean hasRecorded(ConceptMap conceptMap) { // TODO method shouldn't be needed
+            return produced.contains(conceptMap);
+        }
+
+        public Set<ConceptMap> recorded() {
+            return produced;
         }
     }
 }

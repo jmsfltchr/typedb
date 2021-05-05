@@ -105,7 +105,7 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
 
         private final int iteration;
         private final DownstreamManager downstreamManager;
-        private final ProducedRecorder producedRecorder;
+        private final grakn.core.reasoner.resolution.framework.AnswerManager.ProducedRecorder producedRecorder;
 
         public AnswerManager(int iteration) {
             this(iteration, new HashSet<>());
@@ -114,7 +114,7 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
         public AnswerManager(int iteration, Set<ConceptMap> produced) {
             this.iteration = iteration;
             this.downstreamManager = new DownstreamManager();
-            this.producedRecorder = new ProducedRecorder(produced);
+            this.producedRecorder = new grakn.core.reasoner.resolution.framework.AnswerManager.ProducedRecorder(produced);
         }
 
         public DownstreamManager downstreamManager() {
@@ -125,7 +125,7 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
             return iteration;
         }
 
-        public ProducedRecorder producedRecorder() {
+        public grakn.core.reasoner.resolution.framework.AnswerManager.ProducedRecorder producedRecorder() {
             return producedRecorder;
         }
     }

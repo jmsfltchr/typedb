@@ -269,7 +269,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
             if (cacheRegister.isRegistered(answerFromUpstream)) {
                 AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream); // TODO: It's possible the cache we get here uses subsumption, but that we shouldn't if we're explaining
                 // TODO: can we always cast to a ConceptMapCache?
-                return new RetrievalAnswerManager(fromUpstream, answerCache.asConceptMapCache(), iteration, true);
+                return new ConceptMapAnswerManager(fromUpstream, answerCache.asConceptMapCache(), iteration, true, true);
             } else {
                 assert fromUpstream.partialAnswer().isConcludable();
                 AnswerCache.ConceptMapCache answerCache = new AnswerCache.ConceptMapCache(cacheRegister, answerFromUpstream);
@@ -374,7 +374,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     }
 
-    private abstract class ConceptMapAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
+    private class ConceptMapAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
 
         private final ProducedRecorder producedRecorder;
         private final boolean deduplicate;

@@ -290,7 +290,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         private final List<FunctionalIterator<Partial.Concludable<?>>> materialisedAnswers;
         private final boolean deduplicate;
 
-
         public ConclusionAnswerManager(Request fromUpstream, AnswerCache<Map<Identifier.Variable, Concept>, Map<Identifier.Variable, Concept>> answerCache,
                                        int iteration, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, false);

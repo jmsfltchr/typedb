@@ -209,7 +209,8 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public static class ConcludableExplanationCache extends AnswerCache<Partial.Concludable<?>, ConceptMap> {
 
-        public ConcludableExplanationCache(Register<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
+        public ConcludableExplanationCache(Register<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister,
+                                           ConceptMap state) {
             super(cacheRegister, state);
         }
 

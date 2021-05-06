@@ -905,7 +905,7 @@ public abstract class AnswerStateImpl implements AnswerState {
 
                 @Override
                 public Explain with(ConceptMap conditionAnswer, boolean requiresReiteration) {
-                    assert this.conditionAnswer() == null;
+                    assert this.conditionAnswer() == null && conditionAnswer != null;
                     // note: we add more concepts to the conclusion answer than there are variables to preserve uniqueness of multiple explanations
                     return new ExplainImpl(conditionAnswer, rule(), unifier(), instanceRequirements(), extendAnswer(conditionAnswer), parent(), root(), requiresReiteration);
                 }

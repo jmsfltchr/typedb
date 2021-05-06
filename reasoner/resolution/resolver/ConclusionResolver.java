@@ -91,7 +91,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                 .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
 
         if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
-            answerManager.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+            answerManager.newMaterialisedAnswers(fromDownstream, materialisations,
+                                                 fromDownstream.answer().requiresReiteration());
             Optional<? extends Partial.Concludable<?>> nextAnswer;
             if ((nextAnswer = answerManager.nextAnswer()).isPresent()) {
                 answerToUpstream(nextAnswer.get(), fromUpstream, iteration);
@@ -101,7 +102,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         } else {
             if (!answerManager.isComplete()) {
                 if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
-                answerManager.newMaterialisedAnswers(materialisations, fromDownstream.answer().requiresReiteration());
+                answerManager.newMaterialisedAnswers(fromDownstream, materialisations,
+                                                     fromDownstream.answer().requiresReiteration());
             }
             nextAnswer(fromUpstream, answerManager, iteration);
         }
@@ -157,7 +159,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             } else if (!answerManager.isComplete() && answerManager.downstreamManager().hasDownstream()) {
                 requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
-                answerManager.setComplete();
+                 answerManager.setComplete();
                 failToUpstream(fromUpstream, iteration);
             }
         }
@@ -254,9 +256,11 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             complete = true;
         }
 
-        protected abstract FunctionalIterator<CONCLUDABLE> toUpstream(Map<Identifier.Variable, Concept> answer);
+        protected abstract FunctionalIterator<CONCLUDABLE> toUpstream(Response.Answer fromDownstream, Map<Identifier.Variable, Concept> answer);
 
-        public abstract void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration);
+        public abstract void newMaterialisedAnswers(Response.Answer fromDownstream,
+                                                    FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations,
+                                                    boolean requiresReiteration);
 
         private static class Rule extends ConclusionAnswerManager<Partial.Concludable.Match<?>> {
 
@@ -268,14 +272,16 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             }
 
             @Override
-            protected FunctionalIterator<Partial.Concludable.Match<?>> toUpstream(Map<Identifier.Variable, Concept> answer) {
-                return fromUpstream.partialAnswer().asConclusion().asMatch().aggregateToUpstream(answer);
+            protected FunctionalIterator<Partial.Concludable.Match<?>> toUpstream(Response.Answer fromDownstream, Map<Identifier.Variable, Concept> answer) {
+                return fromDownstream.answer().asConclusion().asMatch().aggregateToUpstream(answer);
             }
 
             @Override
-            public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {
+            public void newMaterialisedAnswers(Response.Answer fromDownstream,
+                                               FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations,
+                                               boolean requiresReiteration) {
                 this.answerIterator = this.answerIterator
-                        .link(materialisations.flatMap(this::toUpstream))
+                        .link(materialisations.flatMap(m -> toUpstream(fromDownstream, m)))
                         .filter(ans -> !producedRecorder.hasRecorded(ans.conceptMap()))
                         .map(ans -> {
                             if (requiresReiteration) ans.setRequiresReiteration();
@@ -292,14 +298,15 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             }
 
             @Override
-            protected FunctionalIterator<Partial.Concludable.Explain> toUpstream(Map<Identifier.Variable, Concept> answer) {
-                return fromUpstream.partialAnswer().asConclusion().asExplain().aggregateToUpstream(answer);
+            protected FunctionalIterator<Partial.Concludable.Explain> toUpstream(Response.Answer fromDownstream, Map<Identifier.Variable, Concept> answer) {
+                return fromDownstream.answer().asConclusion().asExplain().aggregateToUpstream(answer);
             }
 
-            @Override
-            public void newMaterialisedAnswers(FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations, boolean requiresReiteration) {
+            public void newMaterialisedAnswers(Response.Answer fromDownstream,
+                                               FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations,
+                                               boolean requiresReiteration) {
                 this.answerIterator = this.answerIterator
-                        .link(materialisations.flatMap(this::toUpstream))
+                        .link(materialisations.flatMap(m -> toUpstream(fromDownstream, m)))
                         .map(ans -> {
                             if (requiresReiteration) ans.setRequiresReiteration();
                             return ans;

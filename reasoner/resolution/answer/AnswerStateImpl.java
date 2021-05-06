@@ -843,7 +843,7 @@ public abstract class AnswerStateImpl implements AnswerState {
                 }
 
                 @Override
-                public FunctionalIterator<? extends Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
+                public FunctionalIterator<Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
                     FunctionalIterator<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
                     return unUnified.map(ans -> parent().with(ans, requiresReiteration()));
                 }
@@ -911,7 +911,7 @@ public abstract class AnswerStateImpl implements AnswerState {
                 }
 
                 @Override
-                public FunctionalIterator<? extends Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
+                public FunctionalIterator<Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts) {
                     FunctionalIterator<ConceptMap> unUnified = unifier().unUnify(concepts, instanceRequirements());
                     return unUnified.map(ans ->
                          parent().with(ans, requiresReiteration(), rule(), toConceptMap(concepts), unifier(), conditionAnswer())

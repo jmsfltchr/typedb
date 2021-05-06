@@ -410,7 +410,7 @@ public interface AnswerState {
             interface Match extends Conclusion<Match, Concludable.Match<?>>, Explainable {
 
                 @Override
-                FunctionalIterator<? extends Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
+                FunctionalIterator<Concludable.Match<?>> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
 
                 Match with(ConceptMap extension, boolean requiresReiteration);
 
@@ -432,7 +432,7 @@ public interface AnswerState {
                 Explain with(ConceptMap conditionAnswer, boolean requiresReiteration);
 
                 @Override
-                FunctionalIterator<? extends Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
+                FunctionalIterator<Concludable.Explain> aggregateToUpstream(Map<Identifier.Variable, Concept> concepts);
 
                 @Override
                 Compound.Condition.Explain toDownstream(Set<Identifier.Variable.Retrievable> filter);

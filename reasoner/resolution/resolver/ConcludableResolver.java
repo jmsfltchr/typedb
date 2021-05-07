@@ -384,7 +384,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected FunctionalIterator<? extends Partial<?>> toUpstream(Partial.Concludable<?> partial) {
-            if (partial.asExplain().hasExplanation()) {
+            if (partial.asExplain().ofInferred()) {
                 Partial<?> upstreamAnswer = partial.asExplain().toUpstreamInferred();
                 if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
                 return Iterators.single(upstreamAnswer);

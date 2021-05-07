@@ -729,7 +729,7 @@ public abstract class AnswerStateImpl implements AnswerState {
                     return new ExplainImpl(explanation, mapping(), parent(), extendAnswer(extension), root(), requiresReiteration);
                 }
 
-                public boolean hasExplanation() {
+                public boolean ofInferred() {
                     return explanation != null;
                 }
 

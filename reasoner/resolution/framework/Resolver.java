@@ -22,7 +22,6 @@ import grakn.common.collection.Either;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
-import grakn.core.common.poller.Poller;
 import grakn.core.concept.Concept;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
@@ -33,7 +32,6 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.pattern.variable.Variable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState;
-import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
 import grakn.core.traversal.Traversal;
 import grakn.core.traversal.TraversalEngine;
@@ -43,12 +41,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
@@ -113,13 +109,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         return requestRouter.get(toDownstream);
     }
 
-    private void logMessage(int iteration) {
-        int i = messageCount.incrementAndGet();
-        if (i % 100 == 0) {
-            LOG.info("Message count: {} (iteration {})", i, iteration);
-        }
-    }
-
     protected void requestFromDownstream(Request request, Request fromUpstream, int iteration) {
         LOG.trace("{} : Sending a new answer Request to downstream: {}", name(), request);
         if (resolutionTracing) ResolutionTracer.get().request(this.name(), request.receiver().name(), iteration,
@@ -127,7 +116,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         // TODO: we may overwrite if multiple identical requests are sent, when to clean up?
         requestRouter.put(request, fromUpstream);
         Driver<? extends Resolver<?>> receiver = request.receiver();
-        logMessage(iteration);
         receiver.execute(actor -> actor.receiveRequest(request, iteration));
     }
 
@@ -139,7 +127,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
                 this.name(), fromUpstream.sender().name(), iteration,
                 response.asAnswer().answer().conceptMap().concepts().keySet().toString()
         );
-        logMessage(iteration);
         fromUpstream.sender().execute(actor -> actor.receiveAnswer(response, iteration));
     }
 
@@ -149,7 +136,6 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         if (resolutionTracing) ResolutionTracer.get().responseExhausted(
                 this.name(), fromUpstream.sender().name(), iteration
         );
-        logMessage(iteration);
         fromUpstream.sender().execute(actor -> actor.receiveFail(response, iteration));
     }
 

@@ -82,14 +82,16 @@ public abstract class AnswerManager {
 
             if (deduplicate) {
                 this.cacheReader = answerCache.reader(mayCauseReiteration).flatMap(
-                        answer -> toUpstream(answer).filter(partial ->!producedRecorder.record(partial.conceptMap())));
+                        answer -> toUpstream(answer).filter(partial ->!producedRecorder.hasRecorded(partial.conceptMap())));
             } else {
                 this.cacheReader = answerCache.reader(mayCauseReiteration).flatMap(this::toUpstream);
             }
         }
 
         public Optional<? extends AnswerState.Partial<?>> nextAnswer() {
-            return cacheReader.poll();
+            Optional<? extends AnswerState.Partial<?>> ans = cacheReader.poll();
+            if (ans.isPresent() && producedRecorder != null) producedRecorder.record(ans.get().conceptMap());
+            return ans;
         }
 
         protected abstract FunctionalIterator<? extends AnswerState.Partial<?>> toUpstream(ANSWER answer);
@@ -112,10 +114,8 @@ public abstract class AnswerManager {
             this.produced = produced;
         }
 
-        public boolean record(ConceptMap conceptMap) {
-            if (produced.contains(conceptMap)) return true;
+        public void record(ConceptMap conceptMap) {
             produced.add(conceptMap);
-            return false;
         }
 
         public boolean hasRecorded(ConceptMap conceptMap) { // TODO method shouldn't be needed

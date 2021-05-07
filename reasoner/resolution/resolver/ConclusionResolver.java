@@ -90,23 +90,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
                 .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
 
-        if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
+        if (!answerManager.isComplete()) {
+            if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
             answerManager.newMaterialisedAnswers(fromDownstream, materialisations,
                                                  fromDownstream.answer().requiresReiteration());
-            Optional<? extends Partial.Concludable<?>> nextAnswer;
-            if ((nextAnswer = answerManager.nextAnswer()).isPresent()) {
-                answerToUpstream(nextAnswer.get(), fromUpstream, iteration);
-            } else {
-                failToUpstream(fromUpstream, iteration);
-            }
-        } else {
-            if (!answerManager.isComplete()) {
-                if (!materialisations.hasNext()) throw GraknException.of(ILLEGAL_STATE);
-                answerManager.newMaterialisedAnswers(fromDownstream, materialisations,
-                                                     fromDownstream.answer().requiresReiteration());
-            }
-            nextAnswer(fromUpstream, answerManager, iteration);
         }
+        nextAnswer(fromUpstream, answerManager, iteration);
     }
 
     @Override
@@ -146,22 +135,14 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, ConclusionAnswerManager<?> answerManager, int iteration) {
-        if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
-            if (answerManager.downstreamManager().hasDownstream()) {
-                requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
-            } else {
-                failToUpstream(fromUpstream, iteration);
-            }
+        Optional<? extends Partial.Concludable<?>> upstreamAnswer = answerManager.nextAnswer();
+        if (upstreamAnswer.isPresent()) {
+            answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
+        } else if (!answerManager.isComplete() && answerManager.downstreamManager().hasDownstream()) {
+            requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
         } else {
-            Optional<? extends Partial.Concludable<?>> upstreamAnswer = answerManager.nextAnswer();
-            if (upstreamAnswer.isPresent()) {
-                answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
-            } else if (!answerManager.isComplete() && answerManager.downstreamManager().hasDownstream()) {
-                requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
-            } else {
-                 answerManager.setComplete();
-                failToUpstream(fromUpstream, iteration);
-            }
+            answerManager.setComplete();
+            failToUpstream(fromUpstream, iteration);
         }
     }
 

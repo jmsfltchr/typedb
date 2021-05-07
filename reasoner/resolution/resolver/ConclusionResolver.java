@@ -266,10 +266,18 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                         .filter(ans -> !producedRecorder.hasRecorded(ans.conceptMap()))
                         .map(ans -> {
                             if (requiresReiteration) ans.setRequiresReiteration();
-                            producedRecorder.record(ans.conceptMap());
                             return ans;
                         });
             }
+
+            @Override
+            public Optional<Partial.Concludable.Match<?>> nextAnswer() {
+                if (!answerIterator.hasNext()) return Optional.empty();
+                Partial.Concludable.Match<?> ans = answerIterator.next();
+                producedRecorder.record(ans.conceptMap());
+                return Optional.of(ans);
+            }
+
         }
 
         private static class Explaining extends ConclusionAnswerManager<Partial.Concludable.Explain> {

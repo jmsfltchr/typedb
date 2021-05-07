@@ -32,6 +32,7 @@ import java.util.Set;
 import static grakn.common.util.Objects.className;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
 
+// TODO: Rename to AnswerProvider
 public abstract class AnswerManager {
 
     protected final Request fromUpstream;
@@ -96,6 +97,7 @@ public abstract class AnswerManager {
         public AnswerCache<ANSWER, SUBSUMES> answerCache() {
             return answerCache;
         }
+
     }
 
     // TODO: Rename to "Deduplicator"

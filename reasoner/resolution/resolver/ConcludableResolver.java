@@ -328,7 +328,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     private class ConceptMapAnswerManager extends CachingAnswerManager<ConceptMap, ConceptMap> {
 
-
         public ConceptMapAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
                                        int iteration, boolean deduplicate, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration, deduplicate);

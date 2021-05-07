@@ -20,7 +20,7 @@ package grakn.core.reasoner.resolution.resolver;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.ResolverRegistry;
-import grakn.core.reasoner.resolution.framework.AnswerManager.ProducedRecorder;
+import grakn.core.reasoner.resolution.framework.RequestState.ProducedRecorder;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -37,17 +37,17 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
 
     private static final Logger LOG = LoggerFactory.getLogger(CompoundResolver.class);
 
-    final Map<Request, AnswerManager> answerManagers;
+    final Map<Request, RequestState> requestStates;
     boolean isInitialised;
 
     protected CompoundResolver(Driver<RESOLVER> driver, String name, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
         super(driver, name, registry, traversalEngine, conceptMgr, resolutionTracing);
-        this.answerManagers = new HashMap<>();
+        this.requestStates = new HashMap<>();
         this.isInitialised = false;
     }
 
-    protected abstract void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration);
+    protected abstract void nextAnswer(Request fromUpstream, RequestState requestState, int iteration);
 
     @Override
     public void receiveRequest(Request fromUpstream, int iteration) {
@@ -55,13 +55,13 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
         if (!isInitialised) initialiseDownstreamResolvers();
         if (isTerminated()) return;
 
-        AnswerManager answerManager = getOrUpdateRequestState(fromUpstream, iteration);
-        if (iteration < answerManager.iteration()) {
+        RequestState requestState = getOrUpdateRequestState(fromUpstream, iteration);
+        if (iteration < requestState.iteration()) {
             // short circuit if the request came from a prior iteration
             failToUpstream(fromUpstream, iteration);
         } else {
-            assert iteration == answerManager.iteration();
-            nextAnswer(fromUpstream, answerManager, iteration);
+            assert iteration == requestState.iteration();
+            nextAnswer(fromUpstream, requestState, iteration);
         }
     }
 
@@ -72,48 +72,48 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
 
         Request toDownstream = fromDownstream.sourceRequest();
         Request fromUpstream = fromUpstream(toDownstream);
-        AnswerManager answerManager = answerManagers.get(fromUpstream);
+        RequestState requestState = requestStates.get(fromUpstream);
 
-        if (iteration < answerManager.iteration()) {
+        if (iteration < requestState.iteration()) {
             // short circuit old iteration failed messages back out of the actor model
             failToUpstream(fromUpstream, iteration);
             return;
         }
-        answerManager.downstreamManager().removeDownstream(fromDownstream.sourceRequest());
-        nextAnswer(fromUpstream, answerManager, iteration);
+        requestState.downstreamManager().removeDownstream(fromDownstream.sourceRequest());
+        nextAnswer(fromUpstream, requestState, iteration);
     }
 
-    private AnswerManager getOrUpdateRequestState(Request fromUpstream, int iteration) {
-        if (!answerManagers.containsKey(fromUpstream)) {
-            answerManagers.put(fromUpstream, requestStateCreate(fromUpstream, iteration));
+    private RequestState getOrUpdateRequestState(Request fromUpstream, int iteration) {
+        if (!requestStates.containsKey(fromUpstream)) {
+            requestStates.put(fromUpstream, requestStateCreate(fromUpstream, iteration));
         } else {
-            AnswerManager answerManager = answerManagers.get(fromUpstream);
+            RequestState requestState = requestStates.get(fromUpstream);
 
-            if (answerManager.iteration() < iteration) {
+            if (requestState.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                AnswerManager responseProducerNextIter = requestStateReiterate(fromUpstream, answerManager, iteration);
-                this.answerManagers.put(fromUpstream, responseProducerNextIter);
+                RequestState responseProducerNextIter = requestStateReiterate(fromUpstream, requestState, iteration);
+                this.requestStates.put(fromUpstream, responseProducerNextIter);
             }
         }
-        return answerManagers.get(fromUpstream);
+        return requestStates.get(fromUpstream);
     }
 
-    abstract AnswerManager requestStateCreate(Request fromUpstream, int iteration);
+    abstract RequestState requestStateCreate(Request fromUpstream, int iteration);
 
-    abstract AnswerManager requestStateReiterate(Request fromUpstream, AnswerManager priorResponses, int iteration);
+    abstract RequestState requestStateReiterate(Request fromUpstream, RequestState priorResponses, int iteration);
 
-    // TODO: Bring in line with the other AnswerManagers
-    static class AnswerManager {
+    // TODO: Bring in line with the other RequestStates
+    static class RequestState {
 
         private final int iteration;
         private final DownstreamManager downstreamManager;
         private final ProducedRecorder producedRecorder;
 
-        public AnswerManager(int iteration) {
+        public RequestState(int iteration) {
             this(iteration, new HashSet<>());
         }
 
-        public AnswerManager(int iteration, Set<ConceptMap> produced) {
+        public RequestState(int iteration, Set<ConceptMap> produced) {
             this.iteration = iteration;
             this.downstreamManager = new DownstreamManager();
             this.producedRecorder = new ProducedRecorder(produced);

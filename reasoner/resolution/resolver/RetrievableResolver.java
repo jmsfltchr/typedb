@@ -29,7 +29,7 @@ import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
-import grakn.core.reasoner.resolution.framework.AnswerManager;
+import grakn.core.reasoner.resolution.framework.RequestState;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -49,7 +49,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
     private static final Logger LOG = LoggerFactory.getLogger(RetrievableResolver.class);
 
     private final Retrievable retrievable;
-    private final Map<Request, RetrievableAnswerManager> answerManagers;
+    private final Map<Request, RetrievableRequestState> requestStates;
     protected final Map<Actor.Driver<? extends Resolver<?>>, Register<ConceptMapCache, ConceptMap>> cacheRegisters;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
@@ -57,7 +57,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         super(driver, RetrievableResolver.class.getSimpleName() + "(pattern: " + retrievable.pattern() + ")",
               registry, traversalEngine, conceptMgr, resolutionTracing);
         this.retrievable = retrievable;
-        this.answerManagers = new HashMap<>();
+        this.requestStates = new HashMap<>();
         this.cacheRegisters = new HashMap<>();
     }
 
@@ -66,13 +66,13 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         LOG.trace("{}: received Request: {}", name(), fromUpstream);
         if (isTerminated()) return;
 
-        RetrievableAnswerManager answerManager = getOrReplaceRequestState(fromUpstream, iteration);
-        if (iteration < answerManager.iteration()) {
+        RetrievableRequestState requestState = getOrReplaceRequestState(fromUpstream, iteration);
+        if (iteration < requestState.iteration()) {
             // short circuit old iteration failed messages to upstream
             failToUpstream(fromUpstream, iteration);
         } else {
-            assert iteration == answerManager.iteration();
-            nextAnswer(fromUpstream, answerManager, iteration);
+            assert iteration == requestState.iteration();
+            nextAnswer(fromUpstream, requestState, iteration);
         }
     }
 
@@ -91,22 +91,22 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         throw GraknException.of(ILLEGAL_STATE);
     }
 
-    private RetrievableAnswerManager getOrReplaceRequestState(Request fromUpstream, int iteration) {
-        if (!answerManagers.containsKey(fromUpstream)) {
-            answerManagers.put(fromUpstream, createRequestState(fromUpstream, iteration));
+    private RetrievableRequestState getOrReplaceRequestState(Request fromUpstream, int iteration) {
+        if (!requestStates.containsKey(fromUpstream)) {
+            requestStates.put(fromUpstream, createRequestState(fromUpstream, iteration));
         } else {
-            RetrievableAnswerManager answerManager = this.answerManagers.get(fromUpstream);
+            RetrievableRequestState requestState = this.requestStates.get(fromUpstream);
 
-            if (answerManager.iteration() < iteration) {
+            if (requestState.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                RetrievableAnswerManager responseProducerNextIter = createRequestState(fromUpstream, iteration);
-                this.answerManagers.put(fromUpstream, responseProducerNextIter);
+                RetrievableRequestState responseProducerNextIter = createRequestState(fromUpstream, iteration);
+                this.requestStates.put(fromUpstream, responseProducerNextIter);
             }
         }
-        return answerManagers.get(fromUpstream);
+        return requestStates.get(fromUpstream);
     }
 
-    protected RetrievableAnswerManager createRequestState(Request fromUpstream, int iteration) {
+    protected RetrievableRequestState createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating a new ResponseProducer for iteration:{}, request: {}", name(), iteration, fromUpstream);
         assert fromUpstream.partialAnswer().isRetrievable();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
@@ -121,22 +121,22 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             cacheRegister.register(answerFromUpstream, answerCache);
             if (!answerCache.isComplete()) answerCache.cache(traversalIterator(retrievable.pattern(), answerFromUpstream));
         }
-        return new RetrievableAnswerManager(fromUpstream, answerCache, iteration);
+        return new RetrievableRequestState(fromUpstream, answerCache, iteration);
     }
 
-    private void nextAnswer(Request fromUpstream, RetrievableAnswerManager responseProducer, int iteration) {
+    private void nextAnswer(Request fromUpstream, RetrievableRequestState responseProducer, int iteration) {
         Optional<Partial.Compound<?, ?>> upstreamAnswer = responseProducer.nextAnswer().map(Partial::asCompound);
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
-            answerManagers.get(fromUpstream).answerCache().setComplete();
+            requestStates.get(fromUpstream).answerCache().setComplete();
             failToUpstream(fromUpstream, iteration);
         }
     }
 
-    private static class RetrievableAnswerManager extends AnswerManager.CachingAnswerManager<ConceptMap, ConceptMap> {
+    private static class RetrievableRequestState extends RequestState.CachingRequestState<ConceptMap, ConceptMap> {
 
-        public RetrievableAnswerManager(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
+        public RetrievableRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration, true, false); // TODO do we want this to cause reiteration?
         }
 

@@ -110,9 +110,9 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration) {
-            if (answerManager.downstreamManager().hasDownstream()) {
-                requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
+        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }
@@ -126,9 +126,9 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-            AnswerManager answerManager = answerManagers.get(fromUpstream);
-            if (!answerManager.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
-                answerManager.producedRecorder().record(upstreamAnswer.conceptMap());
+            RequestState requestState = requestStates.get(fromUpstream);
+            if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
+                requestState.producedRecorder().record(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {
@@ -137,13 +137,13 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        AnswerManager requestStateNew(int iteration) {
-            return new AnswerManager(iteration);
+        RequestState requestStateNew(int iteration) {
+            return new RequestState(iteration);
         }
 
         @Override
-        AnswerManager requestStateForIteration(AnswerManager answerManagerPrior, int iteration) {
-            return new AnswerManager(iteration, answerManagerPrior.producedRecorder().recorded());
+        RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
+            return new RequestState(iteration, requestStatePrior.producedRecorder().recorded());
         }
     }
 
@@ -173,9 +173,9 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration) {
-            if (answerManager.downstreamManager().hasDownstream()) {
-                requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
+        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }
@@ -205,9 +205,9 @@ public interface RootResolver<TOP extends Top> {
 
         @Override
         protected boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
-            AnswerManager answerManager = answerManagers.get(fromUpstream);
-            if (!answerManager.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
-                answerManager.producedRecorder().record(upstreamAnswer.conceptMap());
+            RequestState requestState = requestStates.get(fromUpstream);
+            if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
+                requestState.producedRecorder().record(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {
@@ -224,8 +224,8 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected AnswerManager requestStateForIteration(AnswerManager answerManagerPrior, int newIteration) {
-            return new AnswerManager(newIteration, answerManagerPrior.producedRecorder().recorded());
+        protected RequestState requestStateForIteration(RequestState requestStatePrior, int newIteration) {
+            return new RequestState(newIteration, requestStatePrior.producedRecorder().recorded());
         }
     }
 
@@ -270,9 +270,9 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        protected void nextAnswer(Request fromUpstream, AnswerManager answerManager, int iteration) {
-            if (answerManager.downstreamManager().hasDownstream()) {
-                requestFromDownstream(answerManager.downstreamManager().nextDownstream(), fromUpstream, iteration);
+        protected void nextAnswer(Request fromUpstream, RequestState requestState, int iteration) {
+            if (requestState.downstreamManager().hasDownstream()) {
+                requestFromDownstream(requestState.downstreamManager().nextDownstream(), fromUpstream, iteration);
             } else {
                 submitFail(iteration);
             }
@@ -309,13 +309,13 @@ public interface RootResolver<TOP extends Top> {
         }
 
         @Override
-        AnswerManager requestStateNew(int iteration) {
-            return new AnswerManager(iteration);
+        RequestState requestStateNew(int iteration) {
+            return new RequestState(iteration);
         }
 
         @Override
-        AnswerManager requestStateForIteration(AnswerManager answerManagerPrior, int iteration) {
-            return new AnswerManager(iteration, answerManagerPrior.producedRecorder().recorded());
+        RequestState requestStateForIteration(RequestState requestStatePrior, int iteration) {
+            return new RequestState(iteration, requestStatePrior.producedRecorder().recorded());
         }
 
         @Override

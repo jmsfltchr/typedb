@@ -33,12 +33,12 @@ import static grakn.common.util.Objects.className;
 import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_CAST;
 
 // TODO: Rename to AnswerProvider
-public abstract class AnswerManager {
+public abstract class RequestState {
 
     protected final Request fromUpstream;
     private final int iteration;
 
-    protected AnswerManager(Request fromUpstream, int iteration) {
+    protected RequestState(Request fromUpstream, int iteration) {
         this.fromUpstream = fromUpstream;
         this.iteration = iteration;
     }
@@ -65,14 +65,14 @@ public abstract class AnswerManager {
         boolean singleAnswerRequired();
     }
 
-    public abstract static class CachingAnswerManager<ANSWER, SUBSUMES> extends AnswerManager {
+    public abstract static class CachingRequestState<ANSWER, SUBSUMES> extends RequestState {
 
         protected final AnswerCache<ANSWER, SUBSUMES> answerCache;
         protected final boolean mayCauseReiteration;
         protected Poller<? extends AnswerState.Partial<?>> cacheReader;
         protected final ProducedRecorder producedRecorder;
 
-        public CachingAnswerManager(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration,
+        public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration,
                                     boolean mayCauseReiteration, boolean deduplicate) {
             super(fromUpstream, iteration);
             this.answerCache = answerCache;

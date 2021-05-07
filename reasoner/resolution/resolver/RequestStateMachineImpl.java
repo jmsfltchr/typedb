@@ -142,6 +142,19 @@ public abstract class RequestStateMachineImpl implements RequestStateMachine {
         private final Resolver.DownstreamManager downstreamManager;
         private final Poller<ConceptMap> answerPoller;
 
+        // Example usage
+        //
+        // Building:
+        // Consumer<AnswerState> onSendUpstream = (answer) -> answerToUpstream(answer, fromUpstream, iteration);
+        // Supplier<Void> onFail = () -> { failToUpstream(fromUpstream, iteration); return null; };
+        // Consumer<Request> onSearchDownstream = (nextDownstream) -> requestFromDownstream(nextDownstream, fromUpstream, iteration);
+        // Exploration requestStateMachine = new ExplorationRequestStateMachineImpl(fromUpstream, iteration, answerCache, new DownstreamManager(),
+        //                                                                          onSendUpstream, onFail, onSearchDownstream);
+        //
+        // Calling:
+        // requestStateMachine.receivedIteration(iteration);
+        // requestStateMachine.proceed();
+
         ExplorationRequestStateMachineImpl(Request fromUpstream, int iteration, AnswerCache<ConceptMap, ConceptMap> answerCache,
                                            Consumer<ConceptMap> onSendUpstream, Supplier<Void> onFail,
                                            Consumer<Request> onSearchDownstream, Resolver.DownstreamManager downstreamManager) {

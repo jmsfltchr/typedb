@@ -88,12 +88,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         if (!isInitialised) initialiseDownstreamResolvers();
         if (isTerminated()) return;
 
-////        ConceptMapAnswerManager requestState = getOrReplaceRequestState(fromUpstream, iteration);
-//        RequestStateMachine requestStateMachine = getOrReplaceRequestState(fromUpstream, iteration);
-//
-//        requestStateMachine.receivedIteration(iteration);
-//        requestStateMachine.proceed();
-
         CachingAnswerManager<?, ConceptMap> requestState = getOrReplaceRequestState(fromUpstream, iteration);
         if (iteration < requestState.iteration()) {
             // short circuit if the request came from a prior iteration
@@ -189,36 +183,24 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, CachingAnswerManager<?, ConceptMap> answerManager, int iteration) {
-        if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
-            Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound); // TODO: This returns a partial, but it won't contain the correct explanation yet
-            if (upstreamAnswer.isPresent()) {
-                answerFound(upstreamAnswer.get(), fromUpstream, iteration); // TODO: Is this small difference from the implementation below correct or necessary?
-            } else {
-                Exploration exploration;
+        Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound); // TODO: This returns a partial, but it won't contain the correct explanation yet
+
+        if (upstreamAnswer.isPresent()) {
+            answerFound(upstreamAnswer.get(), fromUpstream, iteration);
+        } else {
+            Exploration exploration;
+            if (answerManager.isExploration() && !answerManager.answerCache().isComplete()) {
                 if ((exploration = answerManager.asExploration()).downstreamManager().hasDownstream()) {
                     requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
                 } else {
+                    answerManager.answerCache().setComplete(); // TODO: The cache should not be set as complete during recursion
                     failToUpstream(fromUpstream, iteration);
                 }
-            }
-        } else {
-            Optional<Partial.Compound<?, ?>> upstreamAnswer = answerManager.nextAnswer().map(Partial::asCompound);
-            if (upstreamAnswer.isPresent()) {
-                answerFound(upstreamAnswer.get(), fromUpstream, iteration);
             } else {
-                Exploration exploration;
-                if (answerManager.isExploration() && !answerManager.answerCache().isComplete()) {
-                    if ((exploration = answerManager.asExploration()).downstreamManager().hasDownstream()) {
-                        requestFromDownstream(exploration.downstreamManager().nextDownstream(), fromUpstream, iteration);
-                    } else {
-                        answerManager.answerCache().setComplete(); // TODO: The cache should not be set as complete during recursion
-                        failToUpstream(fromUpstream, iteration);
-                    }
-                } else {
-                    failToUpstream(fromUpstream, iteration);
-                }
+                failToUpstream(fromUpstream, iteration);
             }
         }
+
     }
 
     private CachingAnswerManager<?, ConceptMap> getOrReplaceRequestState(Request fromUpstream, int iteration) {
@@ -238,16 +220,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     }
 
     protected CachingAnswerManager<?, ConceptMap> createRequestState(Request fromUpstream, int iteration) {
-
-//        Consumer<AnswerState> onSendUpstream = (answer) -> answerToUpstream(answer, fromUpstream, iteration);
-//        Supplier<Void> onFail = () -> { failToUpstream(fromUpstream, iteration); return null; };
-//        Consumer<Request> onSearchDownstream = (nextDownstream) -> requestFromDownstream(nextDownstream, fromUpstream, iteration);
-//
-//        Exploration requestStateMachine = new ExplorationRequestStateMachineImpl(fromUpstream, iteration, answerCache, new DownstreamManager(),
-//                                                                                 onSendUpstream, onFail, onSearchDownstream);
-
-        // ===============================================
-
         LOG.debug("{}: Creating new Responses for iteration{}, request: {}", name(), iteration, fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         Register<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);

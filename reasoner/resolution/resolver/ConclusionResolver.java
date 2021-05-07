@@ -135,7 +135,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
     }
 
     private void nextAnswer(Request fromUpstream, ConclusionAnswerManager<?> answerManager, int iteration) {
-        Optional<? extends Partial.Concludable<?>> upstreamAnswer = answerManager.nextAnswer();
+        Optional<? extends Partial<?>> upstreamAnswer = answerManager.nextAnswer();
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else if (!answerManager.isComplete() && answerManager.downstreamManager().hasDownstream()) {
@@ -220,12 +220,6 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             return downstreamManager;
         }
 
-        @Override
-        public Optional<CONCLUDABLE> nextAnswer() {
-            if (!answerIterator.hasNext()) return Optional.empty();
-            return Optional.of(answerIterator.next());
-        }
-
         public boolean isComplete() {
             // TODO:  Placeholder for re-introducing caching
             return complete;
@@ -237,7 +231,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             complete = true;
         }
 
-        protected abstract FunctionalIterator<CONCLUDABLE> toUpstream(Response.Answer fromDownstream, Map<Identifier.Variable, Concept> answer);
+        protected abstract FunctionalIterator<CONCLUDABLE> toUpstream(Response.Answer fromDownstream,
+                                                                      Map<Identifier.Variable, Concept> answer);
 
         public abstract void newMaterialisedAnswers(Response.Answer fromDownstream,
                                                     FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations,
@@ -253,7 +248,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             }
 
             @Override
-            protected FunctionalIterator<Partial.Concludable.Match<?>> toUpstream(Response.Answer fromDownstream, Map<Identifier.Variable, Concept> answer) {
+            protected FunctionalIterator<Partial.Concludable.Match<?>> toUpstream(Response.Answer fromDownstream,
+                                                                                  Map<Identifier.Variable, Concept> answer) {
                 return fromDownstream.answer().asConclusion().asMatch().aggregateToUpstream(answer);
             }
 
@@ -287,7 +283,8 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             }
 
             @Override
-            protected FunctionalIterator<Partial.Concludable.Explain> toUpstream(Response.Answer fromDownstream, Map<Identifier.Variable, Concept> answer) {
+            protected FunctionalIterator<Partial.Concludable.Explain> toUpstream(Response.Answer fromDownstream,
+                                                                                 Map<Identifier.Variable, Concept> answer) {
                 return fromDownstream.answer().asConclusion().asExplain().aggregateToUpstream(answer);
             }
 
@@ -300,6 +297,12 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                             if (requiresReiteration) ans.setRequiresReiteration();
                             return ans;
                         });
+            }
+
+            @Override
+            public Optional<Partial.Concludable.Explain> nextAnswer() {
+                if (!answerIterator.hasNext()) return Optional.empty();
+                return Optional.of(answerIterator.next());
             }
         }
     }

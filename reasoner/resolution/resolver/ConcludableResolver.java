@@ -225,26 +225,24 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         Register<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
 
+        CachingRequestState<?, ConceptMap> requestState;
         assert fromUpstream.partialAnswer().isConcludable();
-        if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
-            assert !cacheRegister.isRegistered(answerFromUpstream);
-            ConcludableExplanationCache answerCache = new ConcludableExplanationCache(cacheRegister, answerFromUpstream);
-            cacheRegister.register(answerFromUpstream, answerCache);
-            if (!answerCache.isComplete()) {
-                answerCache.cache(
-                        traversalIterator(concludable.pattern(), answerFromUpstream)
-                                .map(ans -> fromUpstream.partialAnswer().asConcludable())
-                );
-            }
-            ExplainingRequestState requestState = new ExplainingRequestState(fromUpstream, answerCache, iteration, false);
-            registerRules(fromUpstream, requestState.asExploration());
-            return requestState;
-
+        if (cacheRegister.isRegistered(answerFromUpstream)) {
+            assert !fromUpstream.partialAnswer().asConcludable().isExplain();
+            AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream);
+            requestState = new ConceptMapRequestState(fromUpstream, answerCache.asConceptMapCache(), iteration, true, true);
         } else {
-            if (cacheRegister.isRegistered(answerFromUpstream)) {
-                AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream);
-                // TODO: can we always cast to a ConceptMapCache?
-                return new ConceptMapRequestState(fromUpstream, answerCache.asConceptMapCache(), iteration, true, true);
+            if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
+                assert !cacheRegister.isRegistered(answerFromUpstream);
+                ConcludableExplanationCache answerCache = new ConcludableExplanationCache(cacheRegister, answerFromUpstream);
+                cacheRegister.register(answerFromUpstream, answerCache);
+                if (!answerCache.isComplete()) {
+                    answerCache.cache(
+                            traversalIterator(concludable.pattern(), answerFromUpstream)
+                                    .map(ans -> fromUpstream.partialAnswer().asConcludable())
+                    );
+                }
+                requestState = new ExplainingRequestState(fromUpstream, answerCache, iteration, false);
             } else {
                 ConceptMapCache answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
                 cacheRegister.register(answerFromUpstream, answerCache);
@@ -252,11 +250,11 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                     answerCache.cache(traversalIterator(concludable.pattern(), answerFromUpstream));
                 }
                 boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
-                ConceptMapRequestState requestState = new RuleRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
-                registerRules(fromUpstream, requestState.asExploration());
-                return requestState;
+                requestState = new RuleRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
             }
+            registerRules(fromUpstream, requestState.asExploration());
         }
+        return requestState;
     }
 
     private Register<AnswerCache<?, ConceptMap>, ConceptMap> getOrCreateCacheRegister(Driver<? extends Resolver<?>> root, int iteration) {

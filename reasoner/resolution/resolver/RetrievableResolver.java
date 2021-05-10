@@ -27,7 +27,7 @@ import grakn.core.logic.resolvable.Retrievable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
-import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable.ConceptMapCache;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.RequestState.CachingRequestState;
 import grakn.core.reasoner.resolution.framework.Resolver;

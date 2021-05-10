@@ -27,6 +27,7 @@ import grakn.core.concept.Concept;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.answer.AnswerState;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable.ConceptMapCache;
 import grakn.core.traversal.common.Identifier;
 
 import java.util.ArrayList;
@@ -170,10 +171,9 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         return new ConceptMap(map);
     }
 
-    public static class ConcludableExplanationCache extends AnswerCache<Partial.Concludable<?>, ConceptMap> {
+    public static class PartialAnswerCache extends AnswerCache<Partial.Concludable<?>, ConceptMap> {
 
-        public ConcludableExplanationCache(Map<ConceptMap, AnswerCache<?, ConceptMap>> cacheRegister,
-                                           ConceptMap state) {
+        public PartialAnswerCache(Map<ConceptMap, AnswerCache<?, ConceptMap>> cacheRegister, ConceptMap state) {
             super(cacheRegister, state);
         }
 
@@ -219,41 +219,42 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         }
 
         protected abstract boolean subsumes(ANSWER answer, ConceptMap contained);
-    }
 
-    public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
+        public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
 
-        public ConceptMapCache(Map<ConceptMap, ? extends AnswerCache<?, ConceptMap>> cacheRegister, ConceptMap state) {
-            super(cacheRegister, state);
-        }
+            public ConceptMapCache(Map<ConceptMap, ? extends AnswerCache<?, ConceptMap>> cacheRegister, ConceptMap state) {
+                super(cacheRegister, state);
+            }
 
-        @Override
-        protected Optional<AnswerCache<?, ConceptMap>> getCompletedSubsumingCache() {
-            for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
-                if (cacheRegister.containsKey(subsumingCacheKey)) {
-                    AnswerCache<?, ConceptMap> subsumingCache;
-                    if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
-                        // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.
-                        return Optional.of(subsumingCache);
+            @Override
+            protected Optional<AnswerCache<?, ConceptMap>> getCompletedSubsumingCache() {
+                for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
+                    if (cacheRegister.containsKey(subsumingCacheKey)) {
+                        AnswerCache<?, ConceptMap> subsumingCache;
+                        if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
+                            // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.
+                            return Optional.of(subsumingCache);
+                        }
                     }
                 }
+                return Optional.empty();
             }
-            return Optional.empty();
-        }
 
-        @Override
-        public ConceptMapCache asConceptMapCache() {
-            return this;
-        }
+            @Override
+            public ConceptMapCache asConceptMapCache() {
+                return this;
+            }
 
-        @Override
-        protected List<ConceptMap> answers() {
-            return answers;
-        }
+            @Override
+            protected List<ConceptMap> answers() {
+                return answers;
+            }
 
-        @Override
-        protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
-            return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
+            @Override
+            protected boolean subsumes(ConceptMap conceptMap, ConceptMap contained) {
+                return conceptMap.concepts().entrySet().containsAll(contained.concepts().entrySet());
+            }
         }
     }
+
 }

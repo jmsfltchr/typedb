@@ -31,8 +31,8 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
-import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
-import grakn.core.reasoner.resolution.framework.AnswerCache.ConcludableExplanationCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable.ConceptMapCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.PartialAnswerCache;
 import grakn.core.reasoner.resolution.framework.RequestState.CachingRequestState;
 import grakn.core.reasoner.resolution.framework.RequestState.Exploration;
 import grakn.core.reasoner.resolution.framework.Request;
@@ -228,12 +228,12 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert fromUpstream.partialAnswer().isConcludable();
         if (cacheRegister.containsKey(answerFromUpstream)) {
             assert !fromUpstream.partialAnswer().asConcludable().isExplain();
-            requestState = new ConceptMapRequestState(fromUpstream,
-                                                      cacheRegister.get(answerFromUpstream).asConceptMapCache(),
-                                                      iteration, true, true);
+            requestState = new FollowingRequestState(fromUpstream,
+                                                     cacheRegister.get(answerFromUpstream).asConceptMapCache(),
+                                                     iteration, true, true);
         } else {
             if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
-                ConcludableExplanationCache answerCache = new ConcludableExplanationCache(cacheRegister, answerFromUpstream);
+                PartialAnswerCache answerCache = new PartialAnswerCache(cacheRegister, answerFromUpstream);
                 cacheRegister.put(answerFromUpstream, answerCache);
                 if (!answerCache.isComplete()) {
                     answerCache.cache(
@@ -249,7 +249,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                     answerCache.cache(traversalIterator(concludable.pattern(), answerFromUpstream));
                 }
                 boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
-                requestState = new RuleRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
+                requestState = new LeadingRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
             } else {
                 throw GraknException.of(ILLEGAL_STATE);
             }
@@ -296,10 +296,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private class ConceptMapRequestState extends CachingRequestState<ConceptMap, ConceptMap> {
+    private class FollowingRequestState extends CachingRequestState<ConceptMap, ConceptMap> {
 
-        public ConceptMapRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                      int iteration, boolean deduplicate, boolean mayCauseReiteration) {
+        public FollowingRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
+                                     int iteration, boolean deduplicate, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration, deduplicate);
         }
 
@@ -313,13 +313,13 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     }
 
-    private class RuleRequestState extends ConceptMapRequestState implements Exploration {
+    private class LeadingRequestState extends FollowingRequestState implements Exploration {
 
         private final DownstreamManager downstreamManager;
         private final boolean singleAnswerRequired;
 
-        public RuleRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                 int iteration, boolean singleAnswerRequired, boolean deduplicate) {
+        public LeadingRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
+                                   int iteration, boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, deduplicate, false);
             this.downstreamManager = new DownstreamManager();
             this.singleAnswerRequired = singleAnswerRequired;

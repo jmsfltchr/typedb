@@ -168,8 +168,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         ConclusionRequestState<?> requestState;
         if (fromUpstream.partialAnswer().asConclusion().isExplain()) {
             requestState = new ConclusionRequestState.Explaining(fromUpstream, iteration);
-        } else {
+        } else if (fromUpstream.partialAnswer().asConclusion().isMatch()) {
             requestState = new ConclusionRequestState.Rule(fromUpstream, iteration);
+        } else {
+            throw GraknException.of(ILLEGAL_STATE);
         }
 
         assert fromUpstream.partialAnswer().isConclusion();

@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static grakn.core.common.exception.ErrorMessage.Internal.ILLEGAL_STATE;
 import static grakn.core.common.iterator.Iterators.iterate;
 
 public class ConcludableResolver extends Resolver<ConcludableResolver> {
@@ -241,7 +242,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                     );
                 }
                 requestState = new ExplainingRequestState(fromUpstream, answerCache, iteration, false);
-            } else {
+            } else if (fromUpstream.partialAnswer().asConcludable().isMatch()) {
                 ConceptMapCache answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
                 cacheRegister.put(answerFromUpstream, answerCache);
                 if (!answerCache.isComplete()) {
@@ -249,6 +250,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 }
                 boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
                 requestState = new RuleRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
+            } else {
+                throw GraknException.of(ILLEGAL_STATE);
             }
             registerRules(fromUpstream, requestState.asExploration());
         }

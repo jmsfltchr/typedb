@@ -76,8 +76,8 @@ public class ConditionResolver extends ConjunctionResolver<ConditionResolver> {
     @Override
     boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
         RequestState requestState = requestStates.get(fromUpstream);
-        if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
-            requestState.producedRecorder().record(upstreamAnswer.conceptMap());
+        if (!requestState.deduplicationSet().contains(upstreamAnswer.conceptMap())) {
+            requestState.deduplicationSet().add(upstreamAnswer.conceptMap());
             answerToUpstream(upstreamAnswer, fromUpstream, iteration);
             return true;
         } else {

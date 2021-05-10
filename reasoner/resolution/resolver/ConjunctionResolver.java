@@ -83,6 +83,7 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
 
     abstract Optional<AnswerState> toUpstreamAnswer(Partial.Compound<?, ?> fromDownstream);
 
+    // TODO: Should be absorbed into nextAnswer
     abstract boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration);
 
     @Override
@@ -328,8 +329,8 @@ public abstract class ConjunctionResolver<RESOLVER extends ConjunctionResolver<R
         @Override
         boolean tryAcceptUpstreamAnswer(AnswerState upstreamAnswer, Request fromUpstream, int iteration) {
             RequestState requestState = requestStates.get(fromUpstream);
-            if (!requestState.producedRecorder().hasRecorded(upstreamAnswer.conceptMap())) {
-                requestState.producedRecorder().record(upstreamAnswer.conceptMap());
+            if (!requestState.deduplicationSet().contains(upstreamAnswer.conceptMap())) {
+                requestState.deduplicationSet().add(upstreamAnswer.conceptMap());
                 answerToUpstream(upstreamAnswer, fromUpstream, iteration);
                 return true;
             } else {

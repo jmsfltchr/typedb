@@ -70,18 +70,17 @@ public abstract class RequestState {
         protected final AnswerCache<ANSWER, SUBSUMES> answerCache;
         protected final boolean mayCauseReiteration;
         protected Poller<? extends AnswerState.Partial<?>> cacheReader;
-        protected final ProducedRecorder producedRecorder;
+        protected final Set<ConceptMap> deduplicationSet;
 
         public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration,
                                     boolean mayCauseReiteration, boolean deduplicate) {
             super(fromUpstream, iteration);
             this.answerCache = answerCache;
             this.mayCauseReiteration = mayCauseReiteration;
-            // TODO: Needs to account for the user supplying a produced set to initialise
-            this.producedRecorder = deduplicate ? new ProducedRecorder() : null;
+            this.deduplicationSet = deduplicate ? new HashSet<>() : null;
             this.cacheReader = answerCache.reader(mayCauseReiteration)
                     .flatMap(a -> toUpstream(a)
-                            .filter(partial -> !deduplicate || !producedRecorder.hasRecorded(partial.conceptMap()))
+                            .filter(partial -> !deduplicate || !deduplicationSet.contains(partial.conceptMap()))
                             .map(ans -> {
                                 if (this.answerCache.requiresReiteration()) ans.setRequiresReiteration();
                                 return ans;
@@ -90,7 +89,7 @@ public abstract class RequestState {
 
         public Optional<? extends AnswerState.Partial<?>> nextAnswer() {
             Optional<? extends AnswerState.Partial<?>> ans = cacheReader.poll();
-            if (ans.isPresent() && producedRecorder != null) producedRecorder.record(ans.get().conceptMap());
+            if (ans.isPresent() && deduplicationSet != null) deduplicationSet.add(ans.get().conceptMap());
             return ans;
         }
 
@@ -102,28 +101,4 @@ public abstract class RequestState {
 
     }
 
-    // TODO: Rename to "Deduplicator"
-    public static class ProducedRecorder {
-        private final Set<ConceptMap> produced;
-
-        public ProducedRecorder() {
-            this(new HashSet<>());
-        }
-
-        public ProducedRecorder(Set<ConceptMap> produced) {
-            this.produced = produced;
-        }
-
-        public void record(ConceptMap conceptMap) {
-            produced.add(conceptMap);
-        }
-
-        public boolean hasRecorded(ConceptMap conceptMap) { // TODO method shouldn't be needed
-            return produced.contains(conceptMap);
-        }
-
-        public Set<ConceptMap> recorded() {
-            return produced;
-        }
-    }
 }

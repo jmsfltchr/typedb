@@ -20,7 +20,6 @@ package grakn.core.reasoner.resolution.resolver;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
 import grakn.core.reasoner.resolution.ResolverRegistry;
-import grakn.core.reasoner.resolution.framework.RequestState.ProducedRecorder;
 import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
@@ -107,7 +106,7 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
 
         private final int iteration;
         private final DownstreamManager downstreamManager;
-        private final ProducedRecorder producedRecorder;
+        private final Set<ConceptMap> deduplicationSet;
 
         public RequestState(int iteration) {
             this(iteration, new HashSet<>());
@@ -116,7 +115,7 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
         public RequestState(int iteration, Set<ConceptMap> produced) {
             this.iteration = iteration;
             this.downstreamManager = new DownstreamManager();
-            this.producedRecorder = new ProducedRecorder(produced);
+            this.deduplicationSet = new HashSet<>(produced);
         }
 
         public DownstreamManager downstreamManager() {
@@ -127,8 +126,8 @@ public abstract class CompoundResolver<RESOLVER extends CompoundResolver<RESOLVE
             return iteration;
         }
 
-        public ProducedRecorder producedRecorder() {
-            return producedRecorder;
+        public Set<ConceptMap> deduplicationSet() {
+            return deduplicationSet;
         }
     }
 }

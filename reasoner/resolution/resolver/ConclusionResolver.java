@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -240,11 +241,11 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
 
         private static class Rule extends ConclusionRequestState<Partial.Concludable.Match<?>> {
 
-            private final ProducedRecorder producedRecorder;
+            private final Set<ConceptMap> deduplicationSet;
 
             public Rule(Request fromUpstream, int iteration) {
                 super(fromUpstream, iteration);
-                this.producedRecorder = new ProducedRecorder();
+                this.deduplicationSet = new HashSet<>();
             }
 
             @Override
@@ -259,7 +260,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
                                                boolean requiresReiteration) {
                 this.answerIterator = this.answerIterator
                         .link(materialisations.flatMap(m -> toUpstream(fromDownstream, m)))
-                        .filter(ans -> !producedRecorder.hasRecorded(ans.conceptMap()))
+                        .filter(ans -> !deduplicationSet.contains(ans.conceptMap()))
                         .map(ans -> {
                             if (requiresReiteration) ans.setRequiresReiteration();
                             return ans;
@@ -270,7 +271,7 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
             public Optional<Partial.Concludable.Match<?>> nextAnswer() {
                 if (!answerIterator.hasNext()) return Optional.empty();
                 Partial.Concludable.Match<?> ans = answerIterator.next();
-                producedRecorder.record(ans.conceptMap());
+                deduplicationSet.add(ans.conceptMap());
                 return Optional.of(ans);
             }
 

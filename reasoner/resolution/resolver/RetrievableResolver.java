@@ -17,20 +17,19 @@
 
 package grakn.core.reasoner.resolution.resolver;
 
+import grakn.common.collection.Pair;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
-import grakn.core.concurrent.actor.Actor;
 import grakn.core.logic.resolvable.Retrievable;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
-import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
-import grakn.core.reasoner.resolution.framework.RequestState;
 import grakn.core.reasoner.resolution.framework.Request;
+import grakn.core.reasoner.resolution.framework.RequestState.CachingRequestState;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
@@ -50,7 +49,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
     private final Retrievable retrievable;
     private final Map<Request, RetrievableRequestState> requestStates;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, Register<ConceptMapCache, ConceptMap>> cacheRegisters;
+    protected final Map<Driver<? extends Resolver<?>>, Pair<Map<ConceptMap, AnswerCache<ConceptMap, ConceptMap>>, Integer>> cacheRegistersByRoot;
 
     public RetrievableResolver(Driver<RetrievableResolver> driver, Retrievable retrievable, ResolverRegistry registry,
                                TraversalEngine traversalEngine, ConceptManager conceptMgr, boolean resolutionTracing) {
@@ -58,7 +57,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
               registry, traversalEngine, conceptMgr, resolutionTracing);
         this.retrievable = retrievable;
         this.requestStates = new HashMap<>();
-        this.cacheRegisters = new HashMap<>();
+        this.cacheRegistersByRoot = new HashMap<>();
     }
 
     @Override
@@ -110,18 +109,24 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         LOG.debug("{}: Creating a new ResponseProducer for iteration:{}, request: {}", name(), iteration, fromUpstream);
         assert fromUpstream.partialAnswer().isRetrievable();
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-        Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        cacheRegisters.putIfAbsent(root, new Register<>(iteration));
-        Register<ConceptMapCache, ConceptMap> cacheRegister = cacheRegisters.get(root);
-        ConceptMapCache answerCache;
-        if (cacheRegister.isRegistered(answerFromUpstream)) {
-            answerCache = cacheRegister.get(answerFromUpstream);
+        Map<ConceptMap, AnswerCache<ConceptMap, ConceptMap>> cacheRegister = cacheRegisterForRoot(
+                fromUpstream.partialAnswer().root(), iteration);
+        if (cacheRegister.containsKey(answerFromUpstream)) {
+            return new RetrievableRequestState(fromUpstream, cacheRegister.get(answerFromUpstream), iteration);
         } else {
-            answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
-            cacheRegister.register(answerFromUpstream, answerCache);
+            ConceptMapCache answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
+            cacheRegister.put(answerFromUpstream, answerCache);
             if (!answerCache.isComplete()) answerCache.cache(traversalIterator(retrievable.pattern(), answerFromUpstream));
+            return new RetrievableRequestState(fromUpstream, answerCache, iteration);
         }
-        return new RetrievableRequestState(fromUpstream, answerCache, iteration);
+    }
+
+    private Map<ConceptMap, AnswerCache<ConceptMap, ConceptMap>> cacheRegisterForRoot(Driver<? extends Resolver<?>> root, int iteration) {
+        if (cacheRegistersByRoot.containsKey(root) && cacheRegistersByRoot.get(root).second() < iteration) {
+            cacheRegistersByRoot.remove(root);
+        }
+        cacheRegistersByRoot.putIfAbsent(root, new Pair<>(new HashMap<>(), iteration));
+        return cacheRegistersByRoot.get(root).first();
     }
 
     private void nextAnswer(Request fromUpstream, RetrievableRequestState responseProducer, int iteration) {
@@ -134,7 +139,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         }
     }
 
-    private static class RetrievableRequestState extends RequestState.CachingRequestState<ConceptMap, ConceptMap> {
+    private static class RetrievableRequestState extends CachingRequestState<ConceptMap, ConceptMap> {
 
         public RetrievableRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache, int iteration) {
             super(fromUpstream, answerCache, iteration, true, false); // TODO do we want this to cause reiteration?
@@ -147,6 +152,5 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
             if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
             return Iterators.single(upstreamAnswer);
         }
-
     }
 }

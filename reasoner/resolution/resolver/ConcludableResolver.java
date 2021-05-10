@@ -18,12 +18,12 @@
 
 package grakn.core.reasoner.resolution.resolver;
 
+import grakn.common.collection.Pair;
 import grakn.core.common.exception.GraknException;
 import grakn.core.common.iterator.FunctionalIterator;
 import grakn.core.common.iterator.Iterators;
 import grakn.core.concept.ConceptManager;
 import grakn.core.concept.answer.ConceptMap;
-import grakn.core.concurrent.actor.Actor;
 import grakn.core.logic.LogicManager;
 import grakn.core.logic.Rule;
 import grakn.core.logic.resolvable.Unifier;
@@ -33,7 +33,6 @@ import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConceptMapCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.ConcludableExplanationCache;
-import grakn.core.reasoner.resolution.framework.AnswerCache.Register;
 import grakn.core.reasoner.resolution.framework.RequestState.CachingRequestState;
 import grakn.core.reasoner.resolution.framework.RequestState.Exploration;
 import grakn.core.reasoner.resolution.framework.Request;
@@ -65,7 +64,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private final Map<Request, CachingRequestState<?, ConceptMap>> requestStates;
     private final Set<Identifier.Variable.Retrievable> unboundVars;
     private boolean isInitialised;
-    protected final Map<Actor.Driver<? extends Resolver<?>>, Register<AnswerCache<?, ConceptMap>, ConceptMap>> cacheRegisters;
+    protected final Map<Driver<? extends Resolver<?>>, Pair<Map<ConceptMap, AnswerCache<?, ConceptMap>>, Integer>> cacheRegistersByRoot;
 
     public ConcludableResolver(Driver<ConcludableResolver> driver, grakn.core.logic.resolvable.Concludable concludable,
                                ResolverRegistry registry, TraversalEngine traversalEngine, ConceptManager conceptMgr,
@@ -79,7 +78,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         this.requestStates = new HashMap<>();
         this.unboundVars = unboundVars(concludable.pattern());
         this.isInitialised = false;
-        this.cacheRegisters = new HashMap<>();
+        this.cacheRegistersByRoot = new HashMap<>();
     }
 
     @Override
@@ -222,20 +221,20 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     protected CachingRequestState<?, ConceptMap> createRequestState(Request fromUpstream, int iteration) {
         LOG.debug("{}: Creating new Responses for iteration{}, request: {}", name(), iteration, fromUpstream);
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
-        Register<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = getOrCreateCacheRegister(root, iteration);
+        Map<ConceptMap, AnswerCache<?, ConceptMap>> cacheRegister = cacheRegisterForRoot(root, iteration);
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
 
         CachingRequestState<?, ConceptMap> requestState;
         assert fromUpstream.partialAnswer().isConcludable();
-        if (cacheRegister.isRegistered(answerFromUpstream)) {
+        if (cacheRegister.containsKey(answerFromUpstream)) {
             assert !fromUpstream.partialAnswer().asConcludable().isExplain();
             AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream);
             requestState = new ConceptMapRequestState(fromUpstream, answerCache.asConceptMapCache(), iteration, true, true);
         } else {
             if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
-                assert !cacheRegister.isRegistered(answerFromUpstream);
+                assert !cacheRegister.containsKey(answerFromUpstream);
                 ConcludableExplanationCache answerCache = new ConcludableExplanationCache(cacheRegister, answerFromUpstream);
-                cacheRegister.register(answerFromUpstream, answerCache);
+                cacheRegister.put(answerFromUpstream, answerCache);
                 if (!answerCache.isComplete()) {
                     answerCache.cache(
                             traversalIterator(concludable.pattern(), answerFromUpstream)
@@ -245,7 +244,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                 requestState = new ExplainingRequestState(fromUpstream, answerCache, iteration, false);
             } else {
                 ConceptMapCache answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
-                cacheRegister.register(answerFromUpstream, answerCache);
+                cacheRegister.put(answerFromUpstream, answerCache);
                 if (!answerCache.isComplete()) {
                     answerCache.cache(traversalIterator(concludable.pattern(), answerFromUpstream));
                 }
@@ -257,13 +256,12 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return requestState;
     }
 
-    private Register<AnswerCache<?, ConceptMap>, ConceptMap> getOrCreateCacheRegister(Driver<? extends Resolver<?>> root, int iteration) {
-        cacheRegisters.putIfAbsent(root, new Register<>(iteration));
-        Register<AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister = cacheRegisters.get(root);
-        if (cacheRegister.iteration() < iteration) {
-            cacheRegister.nextIteration(iteration);
+    private Map<ConceptMap, AnswerCache<?, ConceptMap>> cacheRegisterForRoot(Driver<? extends Resolver<?>> root, int iteration) {
+        if (cacheRegistersByRoot.containsKey(root) && cacheRegistersByRoot.get(root).second() < iteration) {
+            cacheRegistersByRoot.remove(root);
         }
-        return cacheRegister;
+        cacheRegistersByRoot.putIfAbsent(root, new Pair<>(new HashMap<>(), iteration));
+        return cacheRegistersByRoot.get(root).first();
     }
 
     private void registerRules(Request fromUpstream, Exploration exploration) {

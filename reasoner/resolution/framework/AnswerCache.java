@@ -49,10 +49,10 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
     private boolean requiresReiteration;
     protected FunctionalIterator<ANSWER> unexploredAnswers;
     protected boolean complete;
-    protected final Register<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister;
+    protected final Map<SUBSUMES, ? extends AnswerCache<?, SUBSUMES>> cacheRegister;
     protected final ConceptMap state;
 
-    protected AnswerCache(Register<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
+    protected AnswerCache(Map<SUBSUMES, ? extends AnswerCache<?, SUBSUMES>> cacheRegister, ConceptMap state) {
         this.cacheRegister = cacheRegister;
         this.state = state;
         this.unexploredAnswers = Iterators.empty();
@@ -80,41 +80,6 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public Poller<ANSWER> reader(boolean mayCauseReiteration) {
         return new Reader(mayCauseReiteration);
-    }
-
-    // TODO: Continue trying to remove the AnswerCacheRegister to reduce it to just a Map
-    // TODO: The larger objective is to create an interface that does no caching that the ConclusionResolver can use while we add proper recursion detection
-    public static class Register<ANSWER_CACHE extends AnswerCache<?, SUBSUMES>, SUBSUMES> {
-        Map<ConceptMap, ANSWER_CACHE> answerCaches;
-        private int iteration;
-
-        public Register(int iteration) {
-            this.iteration = iteration;
-            this.answerCaches = new HashMap<>();
-        }
-
-        public void register(ConceptMap fromUpstream, ANSWER_CACHE answerCache) {
-            assert !answerCaches.containsKey(fromUpstream);
-            answerCaches.put(fromUpstream, answerCache);
-        }
-
-        public boolean isRegistered(ConceptMap conceptMap) {
-            return answerCaches.containsKey(conceptMap);
-        }
-
-        public int iteration() {
-            return iteration;
-        }
-
-        public void nextIteration(int newIteration) {
-            assert newIteration > iteration;
-            iteration = newIteration;
-            answerCaches = new HashMap<>();
-        }
-
-        public ANSWER_CACHE get(ConceptMap fromUpstream) {
-            return answerCaches.get(fromUpstream);
-        }
     }
 
     public class Reader extends AbstractPoller<ANSWER> {
@@ -209,7 +174,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public static class ConcludableExplanationCache extends AnswerCache<Partial.Concludable<?>, ConceptMap> {
 
-        public ConcludableExplanationCache(Register<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister,
+        public ConcludableExplanationCache(Map<ConceptMap, AnswerCache<?, ConceptMap>> cacheRegister,
                                            ConceptMap state) {
             super(cacheRegister, state);
         }
@@ -225,7 +190,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
         protected final Set<ConceptMap> subsumingCacheKeys;
 
-        protected Subsumable(Register<? extends AnswerCache<?, SUBSUMES>, SUBSUMES> cacheRegister, ConceptMap state) {
+        protected Subsumable(Map<SUBSUMES, ? extends AnswerCache<?, SUBSUMES>> cacheRegister, ConceptMap state) {
             super(cacheRegister, state);
             this.subsumingCacheKeys = getSubsumingCacheKeys(state);
         }
@@ -260,14 +225,14 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public static class ConceptMapCache extends Subsumable<ConceptMap, ConceptMap> {
 
-        public ConceptMapCache(Register<? extends AnswerCache<?, ConceptMap>, ConceptMap> cacheRegister, ConceptMap state) {
+        public ConceptMapCache(Map<ConceptMap, ? extends AnswerCache<?, ConceptMap>> cacheRegister, ConceptMap state) {
             super(cacheRegister, state);
         }
 
         @Override
         protected Optional<AnswerCache<?, ConceptMap>> getCompletedSubsumingCache() {
             for (ConceptMap subsumingCacheKey : subsumingCacheKeys) {
-                if (cacheRegister.isRegistered(subsumingCacheKey)) {
+                if (cacheRegister.containsKey(subsumingCacheKey)) {
                     AnswerCache<?, ConceptMap> subsumingCache;
                     if ((subsumingCache = cacheRegister.get(subsumingCacheKey)).isComplete()) {
                         // TODO: Gets the first complete cache we find. Getting the smallest could be more efficient.

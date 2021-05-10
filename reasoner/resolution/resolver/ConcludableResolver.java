@@ -223,16 +223,15 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         Driver<? extends Resolver<?>> root = fromUpstream.partialAnswer().root();
         Map<ConceptMap, AnswerCache<?, ConceptMap>> cacheRegister = cacheRegisterForRoot(root, iteration);
         ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
-
         CachingRequestState<?, ConceptMap> requestState;
         assert fromUpstream.partialAnswer().isConcludable();
         if (cacheRegister.containsKey(answerFromUpstream)) {
             assert !fromUpstream.partialAnswer().asConcludable().isExplain();
-            AnswerCache<?, ConceptMap> answerCache = cacheRegister.get(answerFromUpstream);
-            requestState = new ConceptMapRequestState(fromUpstream, answerCache.asConceptMapCache(), iteration, true, true);
+            requestState = new ConceptMapRequestState(fromUpstream,
+                                                      cacheRegister.get(answerFromUpstream).asConceptMapCache(),
+                                                      iteration, true, true);
         } else {
             if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
-                assert !cacheRegister.containsKey(answerFromUpstream);
                 ConcludableExplanationCache answerCache = new ConcludableExplanationCache(cacheRegister, answerFromUpstream);
                 cacheRegister.put(answerFromUpstream, answerCache);
                 if (!answerCache.isComplete()) {

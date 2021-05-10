@@ -98,27 +98,26 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
             if (requestState.iteration() < iteration) {
                 // when the same request for the next iteration the first time, re-initialise required state
-                RetrievableRequestState responseProducerNextIter = createRequestState(fromUpstream, iteration);
-                this.requestStates.put(fromUpstream, responseProducerNextIter);
+                RetrievableRequestState requestStateNextIter = createRequestState(fromUpstream, iteration);
+                this.requestStates.put(fromUpstream, requestStateNextIter);
             }
         }
         return requestStates.get(fromUpstream);
     }
 
     protected RetrievableRequestState createRequestState(Request fromUpstream, int iteration) {
-        LOG.debug("{}: Creating a new ResponseProducer for iteration:{}, request: {}", name(), iteration, fromUpstream);
+        LOG.debug("{}: Creating a new RequestState for iteration:{}, request: {}", name(), iteration, fromUpstream);
         assert fromUpstream.partialAnswer().isRetrievable();
-        ConceptMap answerFromUpstream = fromUpstream.partialAnswer().conceptMap();
         Map<ConceptMap, AnswerCache<ConceptMap, ConceptMap>> cacheRegister = cacheRegisterForRoot(
                 fromUpstream.partialAnswer().root(), iteration);
-        if (cacheRegister.containsKey(answerFromUpstream)) {
-            return new RetrievableRequestState(fromUpstream, cacheRegister.get(answerFromUpstream), iteration);
-        } else {
-            ConceptMapCache answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
-            cacheRegister.put(answerFromUpstream, answerCache);
-            if (!answerCache.isComplete()) answerCache.cache(traversalIterator(retrievable.pattern(), answerFromUpstream));
-            return new RetrievableRequestState(fromUpstream, answerCache, iteration);
-        }
+        AnswerCache<ConceptMap, ConceptMap> answerCache = cacheRegister.computeIfAbsent(
+                fromUpstream.partialAnswer().conceptMap(), upstreamAns -> {
+                    AnswerCache<ConceptMap, ConceptMap> newCache = new ConceptMapCache(cacheRegister, upstreamAns);
+                    cacheRegister.put(upstreamAns, newCache);
+                    if (!newCache.isComplete()) newCache.cache(traversalIterator(retrievable.pattern(), upstreamAns));
+                    return newCache;
+                });
+        return new RetrievableRequestState(fromUpstream, answerCache, iteration);
     }
 
     private Map<ConceptMap, AnswerCache<ConceptMap, ConceptMap>> cacheRegisterForRoot(Driver<? extends Resolver<?>> root, int iteration) {
@@ -129,8 +128,8 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         return cacheRegistersByRoot.get(root).first();
     }
 
-    private void nextAnswer(Request fromUpstream, RetrievableRequestState responseProducer, int iteration) {
-        Optional<Partial.Compound<?, ?>> upstreamAnswer = responseProducer.nextAnswer().map(Partial::asCompound);
+    private void nextAnswer(Request fromUpstream, RetrievableRequestState requestState, int iteration) {
+        Optional<Partial.Compound<?, ?>> upstreamAnswer = requestState.nextAnswer().map(Partial::asCompound);
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {

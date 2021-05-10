@@ -297,7 +297,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
     private class ConceptMapRequestState extends CachingRequestState<ConceptMap, ConceptMap> {
 
         public ConceptMapRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                       int iteration, boolean deduplicate, boolean mayCauseReiteration) {
+                                      int iteration, boolean deduplicate, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration, deduplicate);
         }
 

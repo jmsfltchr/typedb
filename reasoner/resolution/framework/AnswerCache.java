@@ -45,8 +45,8 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     protected final List<ANSWER> answers;
     private final Set<ANSWER> answersSet;
-    private boolean reiterateOnNewAnswers;
-    private boolean requiresReiteration;
+    private boolean reexploreOnNewAnswers;
+    private boolean requiresReexploration;
     protected FunctionalIterator<ANSWER> unexploredAnswers;
     protected boolean complete;
     protected final Map<SUBSUMES, ? extends AnswerCache<?, SUBSUMES>> cacheRegister;
@@ -58,8 +58,8 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         this.unexploredAnswers = Iterators.empty();
         this.answers = new ArrayList<>(); // TODO: Replace answer list and deduplication set with a bloom filter
         this.answersSet = new HashSet<>();
-        this.reiterateOnNewAnswers = false;
-        this.requiresReiteration = false;
+        this.reexploreOnNewAnswers = false;
+        this.requiresReexploration = false;
         this.complete = false;
     }
 
@@ -67,14 +67,13 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         throw GraknException.of(ILLEGAL_CAST);
     }
 
-    // TODO: cacheIfAbsent?
-    // TODO: Align with the behaviour for adding an iterator to the cache
     public void cache(ANSWER newAnswer) {
-        addIfAbsent(newAnswer);
+        cache(Iterators.single(newAnswer));
     }
 
     public void cache(FunctionalIterator<ANSWER> newAnswers) {
-        // assert !isComplete(); // TODO: Removed to allow additional answers to propagate upstream, which crucially may be carrying requiresReiteration flags
+        // assert !isComplete(); // Removed to allow additional answers to propagate upstream, which crucially may be
+        // carrying requiresReiteration flags
         unexploredAnswers = unexploredAnswers.link(newAnswers);
     }
 
@@ -84,26 +83,24 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public class Reader extends AbstractPoller<ANSWER> {
 
-        private final boolean mayCauseReiteration;
+        private final boolean mayReadOverEagerly;
         private int index;
 
-        public Reader(boolean mayCauseReiteration) {
-            this.mayCauseReiteration = mayCauseReiteration;
+        public Reader(boolean mayReadOverEagerly) {
+            this.mayReadOverEagerly = mayReadOverEagerly;
             index = 0;
         }
 
         @Override
         public Optional<ANSWER> poll() {
-            Optional<ANSWER> nextAnswer = get(index, mayCauseReiteration);
+            Optional<ANSWER> nextAnswer = get(index, mayReadOverEagerly);
             if (nextAnswer.isPresent()) index++;
             return nextAnswer;
         }
 
     }
 
-    // TODO: A method called next shouldn't take an index
-    // TODO: mayCauseReiteration only makes sense in the caller
-    private Optional<ANSWER> get(int index, boolean mayCauseReiteration) {
+    private Optional<ANSWER> get(int index, boolean mayReadOverEagerly) {
         assert index >= 0;
         if (index < answers.size()) {
             return Optional.of(answers.get(index));
@@ -112,7 +109,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
                 Optional<ANSWER> nextAnswer = addIfAbsent(unexploredAnswers.next());
                 if (nextAnswer.isPresent()) return nextAnswer;
             }
-            if (mayCauseReiteration) reiterateOnNewAnswers = true;
+            if (mayReadOverEagerly) reexploreOnNewAnswers = true;
             return Optional.empty();
         } else {
             throw GraknException.of(ILLEGAL_STATE);
@@ -124,16 +121,17 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         if (answersSet.contains(answer)) return Optional.empty();
         answers.add(answer);
         answersSet.add(answer);
-        if (reiterateOnNewAnswers) this.requiresReiteration = true;
+        if (reexploreOnNewAnswers) this.requiresReexploration = true;
         return Optional.of(answer);
     }
 
-    public void setRequiresReiteration() {
-        this.requiresReiteration = true;
+    public void setRequiresReexploration() {
+        this.requiresReexploration = true;
     }
 
     public void setComplete() {
-        assert !unexploredAnswers.hasNext();
+        // assert !unexploredAnswers.hasNext();  // Removed to allow additional answers to propagate upstream, which
+        // crucially may be  carrying requiresReiteration flags
         complete = true;
     }
 
@@ -143,8 +141,8 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     protected abstract List<SUBSUMES> answers();
 
-    public boolean requiresReiteration() {
-        return requiresReiteration;
+    public boolean requiresReexploration() {
+        return requiresReexploration;
     }
 
     private static Set<ConceptMap> getSubsumingCacheKeys(ConceptMap fromUpstream) {
@@ -212,7 +210,7 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
             setCompletedAnswers(subsumingCache.answers());
             complete = true;
             unexploredAnswers = Iterators.empty();
-            if (subsumingCache.requiresReiteration()) setRequiresReiteration();
+            if (subsumingCache.requiresReexploration()) setRequiresReexploration();
         }
 
         private void setCompletedAnswers(List<ANSWER> completeAnswers) {

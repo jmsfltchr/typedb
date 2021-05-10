@@ -73,7 +73,7 @@ public abstract class RequestState {
         protected final Set<ConceptMap> deduplicationSet;
 
         public CachingRequestState(Request fromUpstream, AnswerCache<ANSWER, SUBSUMES> answerCache, int iteration,
-                                    boolean mayCauseReiteration, boolean deduplicate) {
+                                   boolean mayCauseReiteration, boolean deduplicate) {
             super(fromUpstream, iteration);
             this.answerCache = answerCache;
             this.mayCauseReiteration = mayCauseReiteration;
@@ -82,7 +82,7 @@ public abstract class RequestState {
                     .flatMap(a -> toUpstream(a)
                             .filter(partial -> !deduplicate || !deduplicationSet.contains(partial.conceptMap()))
                             .map(ans -> {
-                                if (this.answerCache.requiresReiteration()) ans.setRequiresReiteration();
+                                if (this.answerCache.requiresReexploration()) ans.setRequiresReiteration();
                                 return ans;
                             }));
         }

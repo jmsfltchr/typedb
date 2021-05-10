@@ -339,7 +339,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public void newAnswer(Partial<?> partial, boolean requiresReiteration) {
             answerCache.cache(partial.conceptMap());
-            if (requiresReiteration) answerCache.setRequiresReiteration();
+            if (requiresReiteration) answerCache.setRequiresReexploration();
         }
 
         public boolean singleAnswerRequired() {
@@ -371,7 +371,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         public void newAnswer(Partial<?> partial, boolean requiresReiteration) {
             answerCache.cache(partial.asConcludable());
-            if (requiresReiteration) answerCache.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
+            if (requiresReiteration) answerCache.setRequiresReexploration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
         }
 
         @Override

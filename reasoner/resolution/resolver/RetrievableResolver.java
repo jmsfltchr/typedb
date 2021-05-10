@@ -146,10 +146,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
 
         @Override
         protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap answer) {
-            Partial.Retrievable<?> retrievable = fromUpstream.partialAnswer().asRetrievable();
-            Partial.Compound<?, ?> upstreamAnswer = retrievable.aggregateToUpstream(answer);
-            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration();
-            return Iterators.single(upstreamAnswer);
+            return Iterators.single(fromUpstream.partialAnswer().asRetrievable().aggregateToUpstream(answer));
         }
     }
 }

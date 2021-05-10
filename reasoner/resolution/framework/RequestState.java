@@ -79,13 +79,13 @@ public abstract class RequestState {
             this.mayCauseReiteration = mayCauseReiteration;
             // TODO: Needs to account for the user supplying a produced set to initialise
             this.producedRecorder = deduplicate ? new ProducedRecorder() : null;
-
-            if (deduplicate) {
-                this.cacheReader = answerCache.reader(mayCauseReiteration).flatMap(
-                        answer -> toUpstream(answer).filter(partial ->!producedRecorder.hasRecorded(partial.conceptMap())));
-            } else {
-                this.cacheReader = answerCache.reader(mayCauseReiteration).flatMap(this::toUpstream);
-            }
+            this.cacheReader = answerCache.reader(mayCauseReiteration)
+                    .flatMap(a -> toUpstream(a)
+                            .filter(partial -> !deduplicate || !producedRecorder.hasRecorded(partial.conceptMap()))
+                            .map(ans -> {
+                                if (this.answerCache.requiresReiteration()) ans.setRequiresReiteration();
+                                return ans;
+                            }));
         }
 
         public Optional<? extends AnswerState.Partial<?>> nextAnswer() {

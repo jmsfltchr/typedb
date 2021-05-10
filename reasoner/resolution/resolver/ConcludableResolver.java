@@ -304,9 +304,8 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         protected FunctionalIterator<? extends Partial<?>> toUpstream(ConceptMap conceptMap) {
             Partial.Concludable<?> partial = fromUpstream.partialAnswer().asConcludable();
             assert !partial.isExplain() && partial.isMatch(); // TODO: Can the typing be tightened up to remove these assertions?
-            Partial.Compound<?, ?> upstreamAnswer = partial.asMatch().toUpstreamLookup(conceptMap, concludable.isInferredAnswer(conceptMap));
-            if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
-            return Iterators.single(upstreamAnswer);
+            return Iterators.single(partial.asMatch().toUpstreamLookup(conceptMap,
+                                                                       concludable.isInferredAnswer(conceptMap)));
         }
 
     }
@@ -379,11 +378,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
         @Override
         protected FunctionalIterator<? extends Partial<?>> toUpstream(Partial.Concludable<?> partial) {
-            if (partial.asExplain().ofInferred()) {
-                Partial<?> upstreamAnswer = partial.asExplain().toUpstreamInferred();
-                if (answerCache.requiresReiteration()) upstreamAnswer.setRequiresReiteration(); // TODO: Make it a responsibility of the cache to mark all answers it yields as requiresReiteration if the cache is marked as RequiresReiteration
-                return Iterators.single(upstreamAnswer);
-            }
+            if (partial.asExplain().ofInferred()) return Iterators.single(partial.asExplain().toUpstreamInferred());
             return Iterators.empty();
         }
 

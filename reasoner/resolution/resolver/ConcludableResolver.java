@@ -31,11 +31,11 @@ import grakn.core.pattern.Conjunction;
 import grakn.core.reasoner.resolution.ResolverRegistry;
 import grakn.core.reasoner.resolution.answer.AnswerState.Partial;
 import grakn.core.reasoner.resolution.framework.AnswerCache;
-import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable.ConceptMapCache;
 import grakn.core.reasoner.resolution.framework.AnswerCache.PartialAnswerCache;
+import grakn.core.reasoner.resolution.framework.AnswerCache.Subsumable.ConceptMapCache;
+import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.RequestState.CachingRequestState;
 import grakn.core.reasoner.resolution.framework.RequestState.Exploration;
-import grakn.core.reasoner.resolution.framework.Request;
 import grakn.core.reasoner.resolution.framework.Resolver;
 import grakn.core.reasoner.resolution.framework.Response;
 import grakn.core.reasoner.resolution.framework.Response.Answer;
@@ -228,9 +228,15 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         assert fromUpstream.partialAnswer().isConcludable();
         if (cacheRegister.containsKey(answerFromUpstream)) {
             assert !fromUpstream.partialAnswer().asConcludable().isExplain();
-            requestState = new FollowingRequestState(fromUpstream,
-                                                     cacheRegister.get(answerFromUpstream).asConceptMapCache(),
-                                                     iteration, true, true);
+            if (cacheRegister.get(answerFromUpstream).isConceptMapCache()) {
+                ConceptMapCache answerCache = cacheRegister.get(answerFromUpstream).asConceptMapCache();
+                requestState = new FollowingMatchRequestState(fromUpstream, answerCache, iteration, true, true);
+            } else if (cacheRegister.get(answerFromUpstream).isPartialAnswerCache()) {
+                PartialAnswerCache answerCache = cacheRegister.get(answerFromUpstream).asPartialAnswerCache();
+                requestState = new FollowingExplainRequestState(fromUpstream, answerCache, iteration, true, true);
+            } else {
+                throw GraknException.of(ILLEGAL_STATE);
+            }
         } else {
             if (fromUpstream.partialAnswer().asConcludable().isExplain()) {
                 PartialAnswerCache answerCache = new PartialAnswerCache(cacheRegister, answerFromUpstream);
@@ -241,7 +247,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                                     .map(ans -> fromUpstream.partialAnswer().asConcludable())
                     );
                 }
-                requestState = new ExplainingRequestState(fromUpstream, answerCache, iteration, false);
+                requestState = new LeadingExplainRequestState(fromUpstream, answerCache, iteration, false);
             } else if (fromUpstream.partialAnswer().asConcludable().isMatch()) {
                 ConceptMapCache answerCache = new ConceptMapCache(cacheRegister, answerFromUpstream);
                 cacheRegister.put(answerFromUpstream, answerCache);
@@ -249,7 +255,7 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
                     answerCache.cache(traversalIterator(concludable.pattern(), answerFromUpstream));
                 }
                 boolean singleAnswerRequired = answerFromUpstream.concepts().keySet().containsAll(unboundVars());
-                requestState = new LeadingRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
+                requestState = new LeadingMatchRequestState(fromUpstream, answerCache, iteration, singleAnswerRequired, true);
             } else {
                 throw GraknException.of(ILLEGAL_STATE);
             }
@@ -296,10 +302,10 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         return missingBounds;
     }
 
-    private class FollowingRequestState extends CachingRequestState<ConceptMap, ConceptMap> {
+    private class FollowingMatchRequestState extends CachingRequestState<ConceptMap, ConceptMap> {
 
-        public FollowingRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                     int iteration, boolean deduplicate, boolean mayCauseReiteration) {
+        public FollowingMatchRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
+                                          int iteration, boolean deduplicate, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration, deduplicate);
         }
 
@@ -313,13 +319,13 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
 
     }
 
-    private class LeadingRequestState extends FollowingRequestState implements Exploration {
+    private class LeadingMatchRequestState extends FollowingMatchRequestState implements Exploration {
 
         private final DownstreamManager downstreamManager;
         private final boolean singleAnswerRequired;
 
-        public LeadingRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
-                                   int iteration, boolean singleAnswerRequired, boolean deduplicate) {
+        public LeadingMatchRequestState(Request fromUpstream, AnswerCache<ConceptMap, ConceptMap> answerCache,
+                                        int iteration, boolean singleAnswerRequired, boolean deduplicate) {
             super(fromUpstream, answerCache, iteration, deduplicate, false);
             this.downstreamManager = new DownstreamManager();
             this.singleAnswerRequired = singleAnswerRequired;
@@ -347,12 +353,27 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         }
     }
 
-    private static class ExplainingRequestState extends CachingRequestState<Partial.Concludable<?>, ConceptMap> implements Exploration {
+    private static class FollowingExplainRequestState extends CachingRequestState<Partial.Concludable<?>, ConceptMap> {
+
+        public FollowingExplainRequestState(Request fromUpstream,
+                                            AnswerCache<Partial.Concludable<?>, ConceptMap> answerCache,
+                                            int iteration, boolean mayCauseReiteration, boolean deduplicate) {
+            super(fromUpstream, answerCache, iteration, mayCauseReiteration, deduplicate);
+        }
+
+        @Override
+        protected FunctionalIterator<? extends Partial<?>> toUpstream(Partial.Concludable<?> partial) {
+            if (partial.asExplain().ofInferred()) return Iterators.single(partial.asExplain().toUpstreamInferred());
+            return Iterators.empty();
+        }
+    }
+
+    private static class LeadingExplainRequestState extends FollowingExplainRequestState implements Exploration {
 
         private final DownstreamManager downstreamManager;
 
-        public ExplainingRequestState(Request fromUpstream, AnswerCache<Partial.Concludable<?>, ConceptMap> answerCache,
-                                       int iteration, boolean mayCauseReiteration) {
+        public LeadingExplainRequestState(Request fromUpstream, AnswerCache<Partial.Concludable<?>, ConceptMap> answerCache,
+                                          int iteration, boolean mayCauseReiteration) {
             super(fromUpstream, answerCache, iteration, mayCauseReiteration, false);
             this.downstreamManager = new DownstreamManager();
         }
@@ -377,12 +398,6 @@ public class ConcludableResolver extends Resolver<ConcludableResolver> {
         @Override
         public boolean singleAnswerRequired() {
             return false;
-        }
-
-        @Override
-        protected FunctionalIterator<? extends Partial<?>> toUpstream(Partial.Concludable<?> partial) {
-            if (partial.asExplain().ofInferred()) return Iterators.single(partial.asExplain().toUpstreamInferred());
-            return Iterators.empty();
         }
 
     }

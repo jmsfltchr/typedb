@@ -64,10 +64,6 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
         this.complete = false;
     }
 
-    public ConceptMapCache asConceptMapCache() {
-        throw GraknException.of(ILLEGAL_CAST);
-    }
-
     public void cache(ANSWER newAnswer) {
         cache(Iterators.single(newAnswer));
     }
@@ -80,6 +76,22 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
 
     public Poller<ANSWER> reader(boolean mayCauseReiteration) {
         return new Reader(mayCauseReiteration);
+    }
+
+    public boolean isConceptMapCache() {
+        return false;
+    }
+
+    public ConceptMapCache asConceptMapCache() {
+        throw GraknException.of(ILLEGAL_CAST, this.getClass(), ConceptMapCache.class);
+    }
+
+    public boolean isPartialAnswerCache() {
+        return false;
+    }
+
+    public PartialAnswerCache asPartialAnswerCache() {
+        throw GraknException.of(ILLEGAL_CAST, this.getClass(), PartialAnswerCache.class);
     }
 
     public class Reader extends AbstractPoller<ANSWER> {
@@ -177,6 +189,10 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
             super(cacheRegister, state);
         }
 
+        public boolean isPartialAnswerCache() {
+            return true;
+        }
+
         @Override
         protected List<ConceptMap> answers() {
             return iterate(answers).map(AnswerState::conceptMap).distinct().toList();
@@ -238,6 +254,11 @@ public abstract class AnswerCache<ANSWER, SUBSUMES> {
                     }
                 }
                 return Optional.empty();
+            }
+
+            @Override
+            public boolean isConceptMapCache() {
+                return true;
             }
 
             @Override

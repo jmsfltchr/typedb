@@ -113,7 +113,6 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         AnswerCache<ConceptMap, ConceptMap> answerCache = cacheRegister.computeIfAbsent(
                 fromUpstream.partialAnswer().conceptMap(), upstreamAns -> {
                     AnswerCache<ConceptMap, ConceptMap> newCache = new ConceptMapCache(cacheRegister, upstreamAns);
-                    cacheRegister.put(upstreamAns, newCache);
                     if (!newCache.isComplete()) newCache.cache(traversalIterator(retrievable.pattern(), upstreamAns));
                     return newCache;
                 });

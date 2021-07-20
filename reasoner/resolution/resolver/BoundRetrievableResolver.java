@@ -103,7 +103,7 @@ public class BoundRetrievableResolver extends Resolver<BoundRetrievableResolver>
         if (cache.isComplete()) sendAnswerOrFail(fromUpstream, iteration, requestStates.get(fromUpstream));
         else {
             cache.clearSource();
-            cache.add(fromDownstream.answer().conceptMap().filter(retrievable.retrieves()));
+            cache.add(fromDownstream.answer().conceptMap());
             Optional<Compound<?, ?>> upstreamAnswer = requestStates.get(fromUpstream).nextAnswer().map(AnswerState.Partial::asCompound);
             if (upstreamAnswer.isPresent()) {
                 answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
@@ -169,7 +169,7 @@ public class BoundRetrievableResolver extends Resolver<BoundRetrievableResolver>
         @Override
         protected FunctionalIterator<? extends AnswerState.Partial<?>> toUpstream(ConceptMap answer) {
             if (subsumes(answer, fromUpstream.partialAnswer().conceptMap())) {
-                return Iterators.single(fromUpstream.partialAnswer().asRetrievable().aggregateToUpstream(answer));
+                return Iterators.single(fromUpstream.partialAnswer().asRetrievable().with(answer));
             } else {
                 return Iterators.empty();
             }

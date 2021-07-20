@@ -211,7 +211,9 @@ public abstract class Resolver<RESOLVER extends Resolver<RESOLVER>> extends Acto
         }
 
         public void addDownstream(Request request) {
-            assert !(downstreams.contains(request)) : "downstream answer producer already contains this request";
+            if (downstreams.contains(request)) {
+                String flag = "stop here";
+            }
             downstreams.add(request);
             downstreamSelector = downstreams.iterator();
         }

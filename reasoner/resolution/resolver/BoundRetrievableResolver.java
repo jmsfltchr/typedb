@@ -104,7 +104,7 @@ public class BoundRetrievableResolver extends Resolver<BoundRetrievableResolver>
         else {
             cache.clearSource();
             cache.add(fromDownstream.answer().conceptMap());
-            Optional<Compound<?, ?>> upstreamAnswer = requestStates.get(fromUpstream).nextAnswer().map(AnswerState.Partial::asCompound);
+            Optional<? extends AnswerState.Partial<?>> upstreamAnswer = requestStates.get(fromUpstream).nextAnswer();
             if (upstreamAnswer.isPresent()) {
                 answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
             } else {
@@ -120,11 +120,11 @@ public class BoundRetrievableResolver extends Resolver<BoundRetrievableResolver>
     }
 
     private void sendAnswerOrFail(Request fromUpstream, int iteration, RequestState requestState) {
-        Optional<Compound<?, ?>> upstreamAnswer = requestState.nextAnswer().map(AnswerState.Partial::asCompound);
+        Optional<? extends AnswerState.Partial<?>> upstreamAnswer = requestState.nextAnswer();
         if (upstreamAnswer.isPresent()) {
             answerToUpstream(upstreamAnswer.get(), fromUpstream, iteration);
         } else {
-            cache.setComplete();
+            cache.setComplete();  // TODO: Be careful setting complete, may be set complete if actually it's being subsumed
             failToUpstream(fromUpstream, iteration);
         }
     }

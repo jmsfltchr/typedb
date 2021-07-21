@@ -74,14 +74,7 @@ public class RetrievableResolver extends Resolver<RetrievableResolver> {
         } else {
             ConceptMap bounds = fromUpstream.partialAnswer().conceptMap();
             Driver<BoundRetrievableResolver> boundRetrievable = getOrReplaceBoundRetrievable(root, bounds);
-            Optional<ConceptMap> subsumer = subsumptionTrackers.computeIfAbsent(
-                    root, r -> new SubsumptionTracker()).getSubsumer(bounds);
-            // If there is a finished subsumer, let the BoundRetrievable know that it can go there for answers
-            Request request = subsumer
-                    .map(conceptMap -> Request.ToSubsumed.create(
-                            driver(), boundRetrievable, boundRetrievablesByRoot.get(root).get(conceptMap),
-                            fromUpstream.partialAnswer()))
-                    .orElseGet(() -> Request.create(driver(), boundRetrievable, fromUpstream.partialAnswer()));
+            Request request = Request.create(driver(), boundRetrievable, fromUpstream.partialAnswer());
             requestMapByRoot.computeIfAbsent(root, r -> new HashMap<>()).put(request, fromUpstream);
             requestFromDownstream(request, fromUpstream, iteration);
         }

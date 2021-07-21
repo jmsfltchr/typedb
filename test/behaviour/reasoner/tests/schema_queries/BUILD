@@ -20,7 +20,6 @@ load("@vaticle_dependencies//tool/checkstyle:rules.bzl", "checkstyle_test")
 
 java_test(
     name = "test",
-    size = "large",
     srcs = [
         "SchemaQueriesTest.java",
     ],

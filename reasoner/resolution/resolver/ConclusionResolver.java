@@ -89,10 +89,10 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         Request fromUpstream = fromUpstream(toDownstream);
         ConclusionRequestState<? extends Partial.Concludable<?>> requestState = this.requestStates.get(fromUpstream);
         if (!requestState.isComplete()) {
-            FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations = conclusion
+            Optional<Map<Identifier.Variable, Concept>> materialisation = conclusion
                     .materialise(fromDownstream.answer().conceptMap(), traversalEngine, conceptMgr);
-            if (!materialisations.hasNext()) throw TypeDBException.of(ILLEGAL_STATE);
-            requestState.newMaterialisedAnswers(fromDownstream.answer(), materialisations);
+            materialisation.ifPresent(m -> requestState.newMaterialisation(fromDownstream.answer(), m));
+
         }
         nextAnswer(fromUpstream, requestState, iteration);
     }
@@ -235,10 +235,9 @@ public class ConclusionResolver extends Resolver<ConclusionResolver> {
         protected abstract FunctionalIterator<CONCLUDABLE> toUpstream(Partial<?> fromDownstream,
                                                                       Map<Identifier.Variable, Concept> answer);
 
-        public void newMaterialisedAnswers(Partial<?> fromDownstream,
-                                           FunctionalIterator<Map<Identifier.Variable, Concept>> materialisations) {
-            this.answerIterator = this.answerIterator
-                    .link(materialisations.flatMap(m -> toUpstream(fromDownstream, m)));
+        public void newMaterialisation(Partial<?> fromDownstream,
+                                       Map<Identifier.Variable, Concept> materialisation) {
+            this.answerIterator = this.answerIterator.link(toUpstream(fromDownstream, materialisation));
         }
 
         private static class Rule extends ConclusionRequestState<Partial.Concludable.Match<?>> {

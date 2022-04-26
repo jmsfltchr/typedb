@@ -26,6 +26,7 @@ import com.vaticle.typedb.core.concept.Concept;
 import com.vaticle.typedb.core.concept.answer.ConceptMap;
 import com.vaticle.typedb.core.reasoner.resolution.answer.Explanation;
 import com.vaticle.typedb.core.test.behaviour.reasoner.verification.CorrectnessVerifier.SoundnessException;
+import com.vaticle.typedb.core.traversal.common.Identifier;
 import com.vaticle.typedb.core.traversal.common.Identifier.Variable.Retrievable;
 import com.vaticle.typeql.lang.query.TypeQLMatch;
 
@@ -34,6 +35,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import static com.vaticle.typedb.core.common.iterator.Iterators.iterate;
 
 class SoundnessVerifier {
 
@@ -61,6 +64,7 @@ class SoundnessVerifier {
     }
 
     private void verifyAnswer(ConceptMap answer, Transaction tx) {
+        verifyExplainableVars(answer);
         answer.explainables().iterator().forEachRemaining(explainable -> {
             tx.query().explain(explainable.id()).forEachRemaining(explanation -> {
                 // This check is valid given that there is no mechanism for recursion termination given by the UX of
@@ -69,8 +73,47 @@ class SoundnessVerifier {
                 else verifiedExplanations.add(explanation);
                 verifyAnswer(explanation.conditionAnswer(), tx);
                 verifyExplanation(explanation);
+                verifyVariableMapping(answer, explainable, explanation);
             });
         });
+    }
+
+    // TODO: Duplicate code from ExplanationTest
+    private static void verifyVariableMapping(ConceptMap ans, ConceptMap.Explainable explainable, Explanation explanation) {
+        assert explanation.variableMapping().keySet().equals(explainable.conjunction().retrieves());
+
+        Map<Retrievable, Set<Retrievable>> mapping = explanation.variableMapping();
+        Map<Retrievable, Set<Retrievable>> retrievableMapping = new HashMap<>();
+        mapping.forEach((k, v) -> retrievableMapping.put(
+                k, iterate(v).filter(Identifier::isRetrievable).map(Identifier.Variable::asRetrievable).toSet()
+        ));
+        ConceptMap projected = applyMapping(retrievableMapping, ans);
+        projected.concepts().forEach((var, concept) -> {
+            assert explanation.conclusionAnswer().concepts().containsKey(var);
+            assert explanation.conclusionAnswer().get(var).equals(concept);
+        });
+    }
+
+    // TODO: Duplicate code from ExplanationTest
+    private static ConceptMap applyMapping(Map<Retrievable, Set<Retrievable>> mapping, ConceptMap completeMap) {
+        Map<Retrievable, Concept> concepts = new HashMap<>();
+        mapping.forEach((from, tos) -> {
+            assert completeMap.contains(from);
+            Concept concept = completeMap.get(from);
+            tos.forEach(mapped -> {
+                assert !concepts.containsKey(mapped) || concepts.get(mapped).equals(concept);
+                concepts.put(mapped, concept);
+            });
+        });
+        return new ConceptMap(concepts);
+    }
+
+    // TODO: Duplicate code from ExplanationTest
+    private static void verifyExplainableVars(ConceptMap ans) {
+        ans.explainables().relations().keySet().forEach(v -> {assert ans.contains(v);});
+        ans.explainables().attributes().keySet().forEach(v -> {assert ans.contains(v);});
+        ans.explainables().ownerships().keySet().forEach(
+                pair -> {assert ans.contains(pair.first()) && ans.contains(pair.second());});
     }
 
     private void verifyExplanation(Explanation explanation) {

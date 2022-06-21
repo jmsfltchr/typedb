@@ -86,16 +86,24 @@ public abstract class ConjunctionController<
     protected void setUpUpstreamControllers() {
         assert resolvables.isEmpty();
         Set<Concludable> concludables = concludablesTriggeringRules();
-        Set<Retrievable> retrievables = Retrievable.extractFrom(conjunction, concludables);
+        Set<Retrievable> retrievables = Retrievable.extractFrom(conjunction, concludables);  // TODO: Inside this step somewhere we must compute the variables that intersect the resolvables. These are our binding variables.
         resolvables.addAll(concludables);
         resolvables.addAll(retrievables);
         iterate(concludables).forEachRemaining(c -> {
-            concludableControllers.put(c, registry().getOrCreateConcludable(c));
+            MappedConcludable mappedController = registry().getOrCreateConcludable(c);
+            concludableControllers.put(c, mappedController);
+            Set<Variable.Retrievable> bindingVars = null;  // TODO: When we do resolvable extraction we find the binding variables and pass these down
+            mappedController.controller().execute(a -> a.estimateCosts(bindingVars, driver()));
         });
         iterate(retrievables).forEachRemaining(r -> {
-            retrievableControllers.put(r, registry().createRetrievable(r));
+            FilteredRetrievable filteredRetrievable = registry().createRetrievable(r);
+            retrievableControllers.put(r, filteredRetrievable);
+            Set<Variable.Retrievable> bindingVars = null;  // TODO: When we do resolvable extraction we find the binding variables and pass these down
+            filteredRetrievable.controller().execute(a -> a.estimateCosts(bindingVars, driver()));
         });
         iterate(conjunction.negations()).forEachRemaining(negation -> {
+            // TODO: How do we incorporate the cost of a negation? Perhaps it's not that hard and we can devise a
+            //  similar method to concludables
             Negated negated = new Negated(negation);
             try {
                 negationControllers.put(negated, registry().createNegation(negated, conjunction));
@@ -104,6 +112,19 @@ public abstract class ConjunctionController<
                 terminate(e);
             }
         });
+    }
+
+    void receiveRetrievableCosts(
+            Map<Set<Variable.Retrievable>, Integer> costs, Driver<RetrievableController> retrievableController
+    ) {
+        // TODO: Check if we've received the costs for all resolvables, if we have then we can compute our own cost and return to any parents.
+    }
+
+    void receiveConcludableCosts(
+            Map<Set<Variable.Retrievable>, Integer> costs,
+            Driver<? extends ConcludableController<?, ?, ?, ?, ?>> concludableController
+    ) {
+        // TODO: Check if we've received the costs for all resolvables, if we have then we can compute our own cost and return to any parents.
     }
 
     abstract Set<Concludable> concludablesTriggeringRules();

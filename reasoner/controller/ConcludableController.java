@@ -40,6 +40,7 @@ import com.vaticle.typedb.core.reasoner.processor.reactive.Reactive.Publisher;
 import com.vaticle.typedb.core.reasoner.processor.reactive.RootSink;
 import com.vaticle.typedb.core.reasoner.processor.reactive.Source;
 import com.vaticle.typedb.core.traversal.common.Identifier.Variable;
+import com.vaticle.typedb.core.traversal.common.Identifier.Variable.Retrievable;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -76,6 +77,7 @@ public abstract class ConcludableController<INPUT, OUTPUT,
                     Driver<? extends ConclusionController<INPUT, ?, ?>> controller = registerConclusionController(rule);
                     conclusionControllers.put(rule.conclusion(), controller);
                     conclusionUnifiers.put(rule.conclusion(), concludable.getUnifiers(rule).toSet());
+                    // controller.execute(c -> c.estimateCosts(bindingVars, driver()));  // TODO: We need to request the costs from each conclusion of the rules that apply
                 });
     }
 
@@ -87,10 +89,24 @@ public abstract class ConcludableController<INPUT, OUTPUT,
         conclusionControllers.get(req.controllerId()).execute(actor -> actor.establishProcessorConnection(req));
     }
 
+    void estimateCosts(Set<Retrievable> bindingVars, Driver<? extends ConjunctionController<?, ?, ?>> parentConjunction) {
+        // TODO: See the same idea in RetrievableController, except here there can be multiple parent conjunctions,
+        //  so we should cache the costs and dispatch them to all parents we see. We also need to cache these parents
+        //  while we compile the costs of the conclusions (upstream).
+
+    }
+
+    void receiveConclusionCosts() {
+        // TODO: Receive the costs from conclusions. Once we've received them all then we can pass our cost downstream.
+        Driver<? extends ConjunctionController<?, ?, ?>> parentConjunction = null;
+        Map<Set<Retrievable>, Integer> costs = null; // TODO: Compute the costs for all combinations of binding variables that we were asked for
+        parentConjunction.execute(c -> c.receiveConcludableCosts(costs, driver()));
+    }
+
     public static class Match extends ConcludableController<Map<Variable, Concept>, ConceptMap, Processor.Match.Request,
             Processor.Match, Match> {
 
-        private final Set<Variable.Retrievable> unboundVars;
+        private final Set<Retrievable> unboundVars;
 
         public Match(Driver<Match> driver, Concludable concludable, Context context) {
             super(driver, concludable, context);
@@ -106,8 +122,8 @@ public abstract class ConcludableController<INPUT, OUTPUT,
             );
         }
 
-        private Set<Variable.Retrievable> unboundVars() {
-            Set<Variable.Retrievable> missingBounds = new HashSet<>();
+        private Set<Retrievable> unboundVars() {
+            Set<Retrievable> missingBounds = new HashSet<>();
             iterate(concludable.pattern().variables())
                     .filter(var -> var.id().isRetrievable())
                     .forEachRemaining(var -> {
@@ -176,7 +192,7 @@ public abstract class ConcludableController<INPUT, OUTPUT,
             > extends AbstractProcessor<INPUT, OUTPUT, REQ, PROCESSOR> {
 
         private final ConceptMap bounds;
-        private final Set<Variable.Retrievable> unboundVars;  // TODO: Can just use a boolean to indicate if fully bound
+        private final Set<Retrievable> unboundVars;  // TODO: Can just use a boolean to indicate if fully bound
         private final Map<Conclusion, Set<Unifier>> conclusionUnifiers;
         private final Set<Identifier> requestedConnections;
         final java.util.function.Supplier<FunctionalIterator<ConceptMap>> traversalSuppplier;
@@ -184,7 +200,7 @@ public abstract class ConcludableController<INPUT, OUTPUT,
         Processor(Driver<PROCESSOR> driver,
                   Driver<? extends AbstractController<?, INPUT, OUTPUT, REQ, PROCESSOR, ?>> controller,
                   Context context, ConceptMap bounds,
-                  Set<Variable.Retrievable> unboundVars,
+                  Set<Retrievable> unboundVars,
                   Map<Conclusion, Set<Unifier>> conclusionUnifiers,
                   Supplier<FunctionalIterator<ConceptMap>> traversalSuppplier,
                   Supplier<String> debugName) {
@@ -231,7 +247,7 @@ public abstract class ConcludableController<INPUT, OUTPUT,
 
             Match(
                     Driver<Match> driver, Driver<ConcludableController.Match> controller, Concludable concludable,
-                    Context context, ConceptMap bounds, Set<Variable.Retrievable> unboundVars,
+                    Context context, ConceptMap bounds, Set<Retrievable> unboundVars,
                     Map<Conclusion, Set<Unifier>> conclusionUnifiers,
                     Supplier<FunctionalIterator<ConceptMap>> traversalSuppplier, Supplier<String> debugName
             ) {
@@ -299,7 +315,7 @@ public abstract class ConcludableController<INPUT, OUTPUT,
 
             Explain(
                     Driver<Explain> driver, Driver<ConcludableController.Explain> controller, Context context,
-                    ConceptMap bounds, Set<Variable.Retrievable> unboundVars,
+                    ConceptMap bounds, Set<Retrievable> unboundVars,
                     Map<Conclusion, Set<Unifier>> conclusionUnifiers,
                     ReasonerConsumer<Explanation> reasonerConsumer,
                     Supplier<FunctionalIterator<ConceptMap>> traversalSuppplier,

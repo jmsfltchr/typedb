@@ -25,7 +25,10 @@ import com.vaticle.typedb.core.reasoner.common.Traversal;
 import com.vaticle.typedb.core.reasoner.processor.AbstractProcessor;
 import com.vaticle.typedb.core.reasoner.processor.AbstractRequest;
 import com.vaticle.typedb.core.reasoner.processor.reactive.Source;
+import com.vaticle.typedb.core.traversal.common.Identifier;
 
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static com.vaticle.typedb.core.reasoner.processor.reactive.PoolingStream.BufferedFanStream.fanOut;
@@ -37,8 +40,7 @@ public class RetrievableController extends AbstractController<
 
     private final Retrievable retrievable;
 
-    RetrievableController(Driver<RetrievableController> driver, Retrievable retrievable,
-                          Context context) {
+    RetrievableController(Driver<RetrievableController> driver, Retrievable retrievable, Context context) {
         super(driver, context, () -> RetrievableController.class.getSimpleName() + "(pattern: " + retrievable + ")");
         this.retrievable = retrievable;
     }
@@ -63,6 +65,13 @@ public class RetrievableController extends AbstractController<
     @Override
     public void routeConnectionRequest(AbstractRequest<?, ?, Void, ?> connectionRequest) {
         // Nothing to do
+    }
+
+    void estimateCosts(Set<Identifier.Variable.Retrievable> bindingVars, Driver<? extends ConjunctionController<?, ?, ?>> parentConjunction) {
+        // TODO: compute the cost here and send it back to the parent conjunction. RetrievableControllers are only ever
+        //  owned by one conjunction, so we can respond directly
+        Map<Set<Identifier.Variable.Retrievable>, Integer> costs = null; // TODO: Compute the costs for all combinations of binding variables that we were asked for
+        parentConjunction.execute(c -> c.receiveRetrievableCosts(costs, driver()));
     }
 
     protected static class RetrievableProcessor extends AbstractProcessor<
